@@ -3,6 +3,19 @@ interface CachedMessage {
   text: string;
 }
 
+export interface IncomingMessageRecord {
+  id: number;
+  time: string;
+  timestamp: number;
+  scene: 'group' | 'private';
+  subType: string;
+  groupId?: string;
+  userId: string;
+  userName?: string;
+  content: string;
+  imageCount: number;
+}
+
 interface RepeaterLog {
   msg: string;
   times: number;
@@ -10,7 +23,14 @@ interface RepeaterLog {
 }
 
 const MSG_CACHE_LIMIT = 2000;
+const INCOMING_HISTORY_LIMIT = 200;
 const YT_HISTORY_LIMIT = 10;
+
+function formatNow(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 class AssistantStorage {
   private latestSNSUpdateTime = new Map<string, number>();
@@ -21,6 +41,13 @@ class AssistantStorage {
 
   /** 最近群消息 msg_idx → 图片与文本缓存，用于引用搜图和 /加图兜底 */
   private recentMessages = new Map<string, CachedMessage>();
+
+  /** 最近收到的消息记录（供管理面板实时查看消息与 group_openid） */
+  private recentIncoming: IncomingMessageRecord[] = [];
+
+  private nextIncomingId = 1;
+
+  private incomingListeners = new Set<(record: IncomingMessageRecord) => void>();
 
   /** 已接触过的 group_openid → 最后活跃时间，方便面板复制 */
   private seenGroups = new Map<string, number>();
@@ -76,6 +103,38 @@ class AssistantStorage {
     return [...this.seenGroups.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([groupId, lastSeenAt]) => ({ groupId, lastSeenAt }));
+  }
+
+  recordIncomingMessage(input: Omit<IncomingMessageRecord, 'id' | 'time' | 'timestamp'>): IncomingMessageRecord {
+    const timestamp = Date.now();
+    const record: IncomingMessageRecord = {
+      id: this.nextIncomingId++,
+      timestamp,
+      time: formatNow(timestamp),
+      ...input,
+    };
+    this.recentIncoming.push(record);
+    if (this.recentIncoming.length > INCOMING_HISTORY_LIMIT) {
+      this.recentIncoming.shift();
+    }
+    for (const fn of this.incomingListeners) {
+      try {
+        fn(record);
+      } catch {
+        // 忽略单个订阅者异常
+      }
+    }
+    return record;
+  }
+
+  /** 返回最新收到的消息（按时间倒序，最新在前） */
+  getRecentIncomingMessages(limit = 100): IncomingMessageRecord[] {
+    return this.recentIncoming.slice(-limit).reverse();
+  }
+
+  subscribeIncomingMessages(fn: (record: IncomingMessageRecord) => void): () => void {
+    this.incomingListeners.add(fn);
+    return () => this.incomingListeners.delete(fn);
   }
 
   /** 记录某群连续相同消息数，已复读过返回 0 */

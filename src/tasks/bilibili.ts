@@ -2,19 +2,22 @@ import { AsyncTask, SimpleIntervalJob } from 'toad-scheduler';
 import { config } from '@/core/config';
 import { runtimeState, sendGroupMessages } from '@/core/bot';
 import storage from '@/core/storage';
-import { logError, logInfo } from '@/core/logger';
+import { logDebug, logError, logInfo } from '@/core/logger';
 import type { ScheduledJob } from '@/core/scheduler';
 import { buildBiliMessage, getBiliDynamic } from '@/service/bilibili/dynamic';
 
 async function checkBiliDynamic(uid: string, groupIds: string[]) {
   try {
     const dy = await getBiliDynamic(uid);
-    if (!dy || dy.pubDate <= storage.getBiliLatestDynamicTime(uid)) return;
+    if (!dy || dy.pubDate <= storage.getBiliLatestDynamicTime(uid)) {
+      logDebug('BiliTask', `检查 UP(${uid}) 动态完成，无新动态`);
+      return;
+    }
     storage.setBiliLatestDynamicTime(uid, dy.pubDate);
 
     const msg = await buildBiliMessage(uid, dy);
     if (!msg) return;
-    logInfo('BiliTask', `推送 UP(${uid}) 动态到 ${groupIds.length} 个群`);
+    logInfo('BiliTask', `推送 UP(${uid}) 动态到 ${groupIds.length} 个群: ${groupIds.join(', ')}`);
     for (const groupId of groupIds) {
       await sendGroupMessages(groupId, [msg]);
     }
@@ -30,7 +33,7 @@ const task = new AsyncTask('biliTask', async () => {
     .filter(([, groupIds]) => Array.isArray(groupIds) && groupIds.length > 0)
     .forEach(([uid, groupIds], i) => {
       setTimeout(() => {
-        checkBiliDynamic(uid, groupIds).catch(() => {});
+        checkBiliDynamic(uid, groupIds).catch((err) => logError('BiliTask', `任务执行异常 (${uid}):`, err));
       }, i * 2000);
     });
 });

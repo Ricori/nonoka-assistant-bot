@@ -158,6 +158,43 @@
     font: inherit; padding: 0 2px;
   }
   .chip button:hover { text-decoration: underline; }
+  .chip-time { color: var(--dim); font-size: 11px; }
+
+  /* Recent Messages */
+  .msg-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .msg-box {
+    max-height: 360px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 10px; background: #0a0f1c;
+  }
+  .msg-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .msg-table th {
+    position: sticky; top: 0; background: #0f172a; color: var(--muted);
+    text-align: left; font-weight: 600; padding: 8px 10px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .msg-table td {
+    padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.08);
+    vertical-align: top;
+  }
+  .msg-table tr:last-child td { border-bottom: none; }
+  .msg-table tr:hover td { background: rgba(148,163,184,0.04); }
+  .msg-time { font-family: var(--mono); color: var(--dim); white-space: nowrap; }
+  .msg-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .msg-badge.group { background: rgba(56,189,248,0.14); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.3); }
+  .msg-badge.at { background: rgba(99,102,241,0.2); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.4); }
+  .msg-badge.private { background: rgba(16,185,129,0.14); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+  .id-cell { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: #cbd5e1; word-break: break-all; }
+  .id-copy {
+    background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: var(--sky);
+    border-radius: 5px; padding: 1px 6px; font-size: 11px; cursor: pointer; flex-shrink: 0;
+  }
+  .id-copy:hover { background: rgba(56,189,248,0.24); }
+  .msg-sender { font-family: var(--mono); font-size: 11px; color: var(--muted); word-break: break-all; max-width: 170px; }
+  .msg-content { color: var(--text); word-break: break-word; white-space: pre-wrap; min-width: 180px; }
+  .msg-empty { padding: 18px; text-align: center; color: var(--dim); font-size: 12px; }
 
   /* Log Viewer */
   .log-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
@@ -173,6 +210,7 @@
     padding: 10px 12px; font: 12px/1.6 var(--mono);
   }
   .log-line { display: flex; gap: 8px; padding: 2px 4px; border-radius: 4px; word-break: break-all; }
+  .log-line.is-error { background: rgba(239, 68, 68, 0.08); }
   .log-line:hover { background: rgba(148,163,184,0.06); }
   .log-time { color: var(--dim); flex-shrink: 0; }
   .log-lvl { font-weight: 700; width: 46px; flex-shrink: 0; text-transform: uppercase; }
@@ -181,6 +219,10 @@
   .lvl-error { color: var(--red); }
   .lvl-debug { color: #a78bfa; }
   .log-tag { color: #93c5fd; flex-shrink: 0; }
+  .log-tag.tag-recv { color: #34d399; }
+  .log-tag.tag-send { color: #38bdf8; }
+  .log-tag.tag-push { color: #fbbf24; }
+  .log-tag.tag-task { color: #c4b5fd; }
   .log-text { color: #e2e8f0; white-space: pre-wrap; }
 
   .toast {
@@ -269,10 +311,38 @@
         <div class="card">
           <div class="card-head">
             <h2>最近活跃群聊（group_openid）</h2>
-            <span class="hint">机器人收到群消息或进群后自动出现在这里</span>
+            <span class="hint">机器人收到群消息或进群后自动实时更新</span>
           </div>
           <div class="chip-list" id="seenGroupList">
-            <span class="hint">暂无记录，在群里发任意消息后点击刷新即可显示</span>
+            <span class="hint">暂无记录，在群里发任意消息后会自动显示</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>最近收到的消息（实时）</h2>
+            <span class="hint" id="msgCountHint">共 0 条，包含 group_openid 与消息内容</span>
+          </div>
+          <div class="msg-toolbar">
+            <input type="text" class="log-search" id="msgSearch" placeholder="按 group_openid / 发送者 / 内容筛选…">
+            <span class="sp"></span>
+            <button class="btn sm" id="msgClearBtn" type="button">清空视图</button>
+          </div>
+          <div class="msg-box">
+            <table class="msg-table">
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>类型</th>
+                  <th>group_openid / 会话 ID</th>
+                  <th>发送者</th>
+                  <th>消息内容</th>
+                </tr>
+              </thead>
+              <tbody id="recentMsgBody">
+                <tr><td colspan="5" class="msg-empty">暂无收到的消息，机器人收到群聊或私聊消息后会实时显示在这里</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -389,7 +459,8 @@
             <button class="log-filter" data-lvl="warn">WARN</button>
             <button class="log-filter" data-lvl="error">ERROR</button>
             <button class="log-filter" data-lvl="debug">DEBUG</button>
-            <input type="text" class="log-search" id="logSearch" placeholder="按关键词/模块筛选…">
+            <button class="log-filter" id="logMsgOnlyBtn" type="button" title="仅显示收到消息、发送回复、推送任务相关日志">仅消息/推送</button>
+            <input type="text" class="log-search" id="logSearch" placeholder="按关键词/模块/group_openid筛选…">
             <span class="sp"></span>
             <button class="btn sm" id="logPauseBtn">暂停滚动</button>
             <button class="btn sm" id="logClearBtn">清屏</button>
@@ -532,6 +603,187 @@
     return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
   }
 
+  function fmtShortTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  async function copyText(text, label = '文本') {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      toast('已复制 ' + label);
+    } catch {
+      toast('复制失败，请手动选中复制', false);
+    }
+  }
+
+  // -------- 最近活跃群聊 & 最近收到的消息 --------
+  let seenGroupsCache = [];
+  let recentMessages = [];
+  const MAX_RECENT_MSGS = 100;
+  let msgSearchText = '';
+
+  function renderSeenGroups(groups) {
+    seenGroupsCache = groups || [];
+    document.getElementById('statGroups').textContent = String(seenGroupsCache.length);
+
+    const groupEl = document.getElementById('seenGroupList');
+    const quickEl = document.getElementById('hPicQuickAdd');
+    groupEl.innerHTML = '';
+    quickEl.innerHTML = '';
+    if (!seenGroupsCache.length) {
+      groupEl.innerHTML = '<span class="hint">暂无记录，在群里发任意消息后会自动显示</span>';
+      return;
+    }
+    seenGroupsCache.forEach((g) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      const idSpan = document.createElement('span');
+      idSpan.textContent = g.groupId;
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'chip-time';
+      timeSpan.textContent = fmtShortTime(g.lastSeenAt);
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = '复制';
+      copyBtn.onclick = () => copyText(g.groupId, 'group_openid');
+      chip.append(idSpan, timeSpan, copyBtn);
+      groupEl.appendChild(chip);
+
+      const qBtn = document.createElement('button');
+      qBtn.type = 'button';
+      qBtn.className = 'btn sm';
+      qBtn.textContent = '+ 加入白名单 ' + g.groupId.slice(0, 8) + '…';
+      qBtn.onclick = () => {
+        const area = document.getElementById('hPicWhiteList');
+        const list = parseStrList(area.value);
+        if (!list.includes(g.groupId)) list.push(g.groupId);
+        area.value = list.join(', ');
+        toast('已加入白名单输入框，别忘了点保存');
+      };
+      quickEl.appendChild(qBtn);
+    });
+  }
+
+  function noteGroupLive(groupId, timestamp) {
+    if (!groupId) return;
+    const next = seenGroupsCache.filter((g) => g.groupId !== groupId);
+    next.unshift({ groupId, lastSeenAt: timestamp || Date.now() });
+    renderSeenGroups(next);
+  }
+
+  function renderRecentMessages() {
+    const tbody = document.getElementById('recentMsgBody');
+    const q = msgSearchText.toLowerCase();
+    const filtered = q
+      ? recentMessages.filter((m) => (
+        (m.groupId || '') + ' ' + (m.userId || '') + ' ' + (m.userName || '') + ' ' + (m.content || '')
+      ).toLowerCase().includes(q))
+      : recentMessages;
+
+    document.getElementById('msgCountHint').textContent =
+      `共 ${recentMessages.length} 条${q ? `（筛选出 ${filtered.length} 条）` : ''}，包含 group_openid 与消息内容`;
+
+    tbody.innerHTML = '';
+    if (!filtered.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'msg-empty';
+      td.textContent = recentMessages.length
+        ? '没有匹配筛选条件的消息'
+        : '暂无收到的消息，机器人收到群聊或私聊消息后会实时显示在这里';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (const m of filtered) {
+      const tr = document.createElement('tr');
+
+      const tdTime = document.createElement('td');
+      tdTime.className = 'msg-time';
+      tdTime.title = m.time || '';
+      tdTime.textContent = (m.time || '').slice(11) || fmtShortTime(m.timestamp);
+
+      const tdType = document.createElement('td');
+      const badge = document.createElement('span');
+      if (m.scene === 'group') {
+        badge.className = 'msg-badge ' + (m.subType === 'at' ? 'at' : 'group');
+        badge.textContent = m.subType === 'at' ? '群聊 @bot' : '群聊';
+      } else {
+        badge.className = 'msg-badge private';
+        badge.textContent = '私聊';
+      }
+      tdType.appendChild(badge);
+
+      const tdId = document.createElement('td');
+      const idVal = m.scene === 'group' ? (m.groupId || '-') : (m.userId || '-');
+      const idWrap = document.createElement('span');
+      idWrap.className = 'id-cell';
+      const idText = document.createElement('span');
+      idText.textContent = idVal;
+      idWrap.appendChild(idText);
+      if (idVal && idVal !== '-') {
+        const cpBtn = document.createElement('button');
+        cpBtn.type = 'button';
+        cpBtn.className = 'id-copy';
+        cpBtn.textContent = '复制';
+        cpBtn.onclick = () => copyText(idVal, m.scene === 'group' ? 'group_openid' : 'user_openid');
+        idWrap.appendChild(cpBtn);
+      }
+      tdId.appendChild(idWrap);
+
+      const tdSender = document.createElement('td');
+      tdSender.className = 'msg-sender';
+      tdSender.title = m.userId || '';
+      tdSender.textContent = m.userName ? `${m.userName} (${(m.userId || '').slice(0, 8)}…)` : (m.userId || '-');
+
+      const tdContent = document.createElement('td');
+      tdContent.className = 'msg-content';
+      tdContent.textContent = m.content || '';
+
+      tr.append(tdTime, tdType, tdId, tdSender, tdContent);
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+  }
+
+  function pushIncomingMessage(record) {
+    if (!record) return;
+    if (recentMessages.some((m) => m.id === record.id)) return;
+    recentMessages.unshift(record);
+    if (recentMessages.length > MAX_RECENT_MSGS) recentMessages.length = MAX_RECENT_MSGS;
+    if (record.scene === 'group' && record.groupId) {
+      noteGroupLive(record.groupId, record.timestamp);
+    }
+    renderRecentMessages();
+  }
+
+  document.getElementById('msgSearch').oninput = (e) => {
+    msgSearchText = e.target.value.trim();
+    renderRecentMessages();
+  };
+
+  document.getElementById('msgClearBtn').onclick = () => {
+    recentMessages = [];
+    renderRecentMessages();
+  };
+
   function renderStatus(st) {
     const pill = document.getElementById('botPill');
     pill.className = 'pill ' + (st.ready ? 'online' : 'offline');
@@ -547,9 +799,6 @@
     const totalPics = gallery.reduce((sum, g) => sum + g.count, 0);
     document.getElementById('statGallery').textContent = `${totalPics} 张`;
     document.getElementById('statGallerySub').textContent = `${gallery.length} 个关键词`;
-
-    const groups = st.seenGroups || [];
-    document.getElementById('statGroups').textContent = String(groups.length);
 
     // 任务卡片
     const grid = document.getElementById('taskGrid');
@@ -573,36 +822,17 @@
     });
 
     // 最近群聊
-    const groupEl = document.getElementById('seenGroupList');
-    const quickEl = document.getElementById('hPicQuickAdd');
-    groupEl.innerHTML = '';
-    quickEl.innerHTML = '';
-    if (!groups.length) {
-      groupEl.innerHTML = '<span class="hint">暂无记录，在群里发任意消息后刷新即可显示</span>';
-    } else {
-      groups.forEach((g) => {
-        const chip = document.createElement('span');
-        chip.className = 'chip';
-        chip.innerHTML = `<span>${escAttr(g.groupId)}</span><button type="button">复制</button>`;
-        chip.querySelector('button').onclick = () => {
-          navigator.clipboard?.writeText(g.groupId);
-          toast('已复制 group_openid');
-        };
-        groupEl.appendChild(chip);
+    renderSeenGroups(st.seenGroups || []);
 
-        const qBtn = document.createElement('button');
-        qBtn.type = 'button';
-        qBtn.className = 'btn sm';
-        qBtn.textContent = '+ 加入白名单 ' + g.groupId.slice(0, 8) + '…';
-        qBtn.onclick = () => {
-          const area = document.getElementById('hPicWhiteList');
-          const list = parseStrList(area.value);
-          if (!list.includes(g.groupId)) list.push(g.groupId);
-          area.value = list.join(', ');
-          toast('已加入白名单输入框，别忘了点保存');
-        };
-        quickEl.appendChild(qBtn);
-      });
+    // 最近收到的消息（首次或增量合并）
+    if (Array.isArray(st.recentMessages)) {
+      const byId = new Map();
+      for (const m of st.recentMessages) byId.set(m.id, m);
+      for (const m of recentMessages) if (!byId.has(m.id)) byId.set(m.id, m);
+      recentMessages = [...byId.values()]
+        .sort((a, b) => (b.id || 0) - (a.id || 0))
+        .slice(0, MAX_RECENT_MSGS);
+      renderRecentMessages();
     }
 
     // 图库词条
@@ -653,7 +883,13 @@
   // -------- 实时日志（SSE） --------
   const logEntries = [];
   const MAX_DOM_LOGS = 800;
+  const MSG_PUSH_TAGS = new Set([
+    'Recv', 'Send', 'Push', 'Audit', 'GroupFlow', 'PrivateFlow', 'Process',
+    'BiliTask', 'TwitterTask', 'YtLiveTask',
+    'Command', 'HPic', 'ImageSearch', 'LocalPic', 'Repeater', 'Notice',
+  ]);
   let logLevelFilter = 'all';
+  let logMsgOnly = false;
   let logSearchText = '';
   let logPaused = false;
   const logBox = document.getElementById('logBox');
@@ -664,6 +900,7 @@
 
   function matchesLog(entry) {
     if (logLevelFilter !== 'all' && entry.level !== logLevelFilter) return false;
+    if (logMsgOnly && !MSG_PUSH_TAGS.has(entry.tag)) return false;
     if (logSearchText) {
       const q = logSearchText.toLowerCase();
       return (entry.tag + ' ' + entry.text).toLowerCase().includes(q);
@@ -671,9 +908,17 @@
     return true;
   }
 
+  function getTagClass(tag) {
+    if (tag === 'Recv') return ' tag-recv';
+    if (tag === 'Send') return ' tag-send';
+    if (tag === 'Push') return ' tag-push';
+    if (tag === 'BiliTask' || tag === 'TwitterTask' || tag === 'YtLiveTask') return ' tag-task';
+    return '';
+  }
+
   function createLogEl(entry) {
     const div = document.createElement('div');
-    div.className = 'log-line';
+    div.className = 'log-line' + (entry.level === 'error' ? ' is-error' : '');
     const time = document.createElement('span');
     time.className = 'log-time';
     time.textContent = entry.time;
@@ -681,7 +926,7 @@
     lvl.className = 'log-lvl lvl-' + entry.level;
     lvl.textContent = entry.level;
     const tag = document.createElement('span');
-    tag.className = 'log-tag';
+    tag.className = 'log-tag' + getTagClass(entry.tag);
     tag.textContent = '[' + entry.tag + ']';
     const text = document.createElement('span');
     text.className = 'log-text';
@@ -710,13 +955,19 @@
     }
   }
 
-  document.querySelectorAll('.log-filter').forEach((btn) => {
+  document.querySelectorAll('.log-filter[data-lvl]').forEach((btn) => {
     btn.onclick = () => {
       logLevelFilter = btn.dataset.lvl;
-      document.querySelectorAll('.log-filter').forEach((b) => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.log-filter[data-lvl]').forEach((b) => b.classList.toggle('active', b === btn));
       rerenderLogs();
     };
   });
+
+  document.getElementById('logMsgOnlyBtn').onclick = (e) => {
+    logMsgOnly = !logMsgOnly;
+    e.currentTarget.classList.toggle('active', logMsgOnly);
+    rerenderLogs();
+  };
 
   document.getElementById('logSearch').oninput = (e) => {
     logSearchText = e.target.value.trim();
@@ -742,6 +993,9 @@
     es.onmessage = (ev) => {
       try { pushLog(JSON.parse(ev.data)); } catch {}
     };
+    es.addEventListener('incoming_message', (ev) => {
+      try { pushIncomingMessage(JSON.parse(ev.data)); } catch {}
+    });
   }
 
   loadAll();

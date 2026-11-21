@@ -13,11 +13,29 @@ import { handleRepeater } from '@/modules/repeater';
 import BilibiliPushJob from '@/tasks/bilibili';
 import TwitterPushJob from '@/tasks/twitter';
 import YtLivePushJob from '@/tasks/youtube';
-import { getCleanText, getOwnImageUrls } from '@/utils/message';
+import { formatIncomingPreview, getCleanText, getOwnImageUrls } from '@/utils/message';
 
 async function dispatchGroup(event: GroupMessageEvent) {
   storage.noteGroup(event.group_id);
-  storage.cacheMessage(event.msg_idx, getCleanText(event.raw_message), getOwnImageUrls(event.message));
+  const cleanText = getCleanText(event.raw_message);
+  const imgUrls = getOwnImageUrls(event.message);
+  const preview = formatIncomingPreview(event.raw_message, imgUrls);
+  const userName = event.sender?.member_nickname || event.sender?.user_name || '';
+
+  storage.cacheMessage(event.msg_idx, cleanText, imgUrls);
+  storage.recordIncomingMessage({
+    scene: 'group',
+    subType: event.sub_type,
+    groupId: event.group_id,
+    userId: event.user_id,
+    userName: userName || undefined,
+    content: preview,
+    imageCount: imgUrls.length,
+  });
+
+  const senderLabel = userName ? `${userName}(${event.user_id})` : event.user_id;
+  const kindLabel = event.sub_type === 'at' ? '@bot' : '普通';
+  logInfo('Recv', `群消息 group_openid=${event.group_id} user=${senderLabel} [${kindLabel}]: ${preview}`);
 
   if (await handleCommand(event)) return;
   if (await handleImageSearch(event)) return;
@@ -27,7 +45,23 @@ async function dispatchGroup(event: GroupMessageEvent) {
 }
 
 async function dispatchPrivate(event: PrivateMessageEvent) {
-  storage.cacheMessage(event.msg_idx, getCleanText(event.raw_message), getOwnImageUrls(event.message));
+  const cleanText = getCleanText(event.raw_message);
+  const imgUrls = getOwnImageUrls(event.message);
+  const preview = formatIncomingPreview(event.raw_message, imgUrls);
+  const userName = event.sender?.member_nickname || event.sender?.user_name || '';
+
+  storage.cacheMessage(event.msg_idx, cleanText, imgUrls);
+  storage.recordIncomingMessage({
+    scene: 'private',
+    subType: event.sub_type,
+    userId: event.user_id,
+    userName: userName || undefined,
+    content: preview,
+    imageCount: imgUrls.length,
+  });
+
+  const senderLabel = userName ? `${userName}(${event.user_id})` : event.user_id;
+  logInfo('Recv', `私聊消息 user_openid=${senderLabel} [${event.sub_type}]: ${preview}`);
 
   if (await handleCommand(event)) return;
   if (await handleImageSearch(event)) return;
@@ -43,10 +77,22 @@ bot.on('message.private', (event) => {
 });
 
 bot.on('notice.group', (event) => {
-  if ('group_id' in event && typeof event.group_id === 'string') {
-    storage.noteGroup(event.group_id);
+  const groupId = 'group_id' in event && typeof event.group_id === 'string' ? event.group_id : undefined;
+  const subType = 'sub_type' in event && typeof event.sub_type === 'string' ? event.sub_type : 'unknown';
+  if (groupId) {
+    storage.noteGroup(groupId);
+    logInfo('Notice', `群事件 [${subType}] group_openid=${groupId}`);
+  } else {
+    logInfo('Notice', `群事件 [${subType}]`, event);
   }
-  logInfo('Notice', event);
+});
+
+bot.on('message.audit.reject', (event) => {
+  logError('Audit', '消息审核被拒绝:', event);
+});
+
+bot.on('message.audit.pass', (event) => {
+  logInfo('Audit', '消息审核已通过:', event);
 });
 
 async function main() {

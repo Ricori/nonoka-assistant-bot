@@ -137,8 +137,12 @@ export async function handleCommand(event: IncomingMessageEvent): Promise<boolea
       await event.reply(`获取推文 ${tweetId} 失败`);
       return true;
     }
-    await sendGroupMessages(targetGroupId, msgs);
-    await event.reply(`已推送推文 ${tweetId} 到群 ${targetGroupId}`);
+    const res = await sendGroupMessages(targetGroupId, msgs);
+    if (res.failed > 0) {
+      await event.reply(`推文 ${tweetId} 推送到群 ${targetGroupId}：成功 ${res.sent}/${res.total}，失败 ${res.failed}（详见日志）`);
+    } else {
+      await event.reply(`已推送推文 ${tweetId} 到群 ${targetGroupId}`);
+    }
     return true;
   }
 

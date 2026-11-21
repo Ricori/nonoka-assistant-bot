@@ -110,8 +110,15 @@ export class AssistantAdmin {
         uptimeMs: Date.now() - runtimeState.startedAt,
         jobs: scheduler.listJobs(),
         seenGroups: storage.getSeenGroups(),
+        recentMessages: storage.getRecentIncomingMessages(50),
         gallery: getGallerySummary(),
       });
+      return;
+    }
+
+    if (url.pathname === '/api/messages' && req.method === 'GET') {
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)));
+      sendJson(res, 200, storage.getRecentIncomingMessages(limit));
       return;
     }
 
@@ -175,15 +182,19 @@ export class AssistantAdmin {
       for (const entry of getRecentLogs(300)) {
         res.write(`data: ${JSON.stringify(entry)}\n\n`);
       }
-      const unsub = subscribeLogs((entry) => {
+      const unsubLog = subscribeLogs((entry) => {
         res.write(`data: ${JSON.stringify(entry)}\n\n`);
+      });
+      const unsubMsg = storage.subscribeIncomingMessages((record) => {
+        res.write(`event: incoming_message\ndata: ${JSON.stringify(record)}\n\n`);
       });
       const heartbeat = setInterval(() => {
         res.write(': ping\n\n');
       }, 25000);
       req.on('close', () => {
         clearInterval(heartbeat);
-        unsub();
+        unsubLog();
+        unsubMsg();
       });
       return;
     }

@@ -1,7 +1,7 @@
 import { GroupMessageEvent } from 'qq-official-bot';
 import { config } from '@/core/config';
 import storage from '@/core/storage';
-import { logError } from '@/core/logger';
+import { logError, logInfo } from '@/core/logger';
 import { getCleanText, getOwnImageUrls } from '@/utils/message';
 
 /** 群聊复读机：仅处理非 @ 的纯文本消息，连续 2~3 条相同后延迟复读一次 */
@@ -20,6 +20,7 @@ export async function handleRepeater(event: GroupMessageEvent): Promise<boolean>
   if (times < threshold) return false;
 
   storage.setRepeaterDone(event.group_id);
+  logInfo('Repeater', `触发复读 group_openid=${event.group_id}: ${text}`);
   setTimeout(() => {
     event.reply(text).catch((err) => logError('Repeater', err));
   }, 1200);

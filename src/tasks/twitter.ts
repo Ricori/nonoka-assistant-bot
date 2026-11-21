@@ -3,7 +3,7 @@ import { config } from '@/core/config';
 import { notifyAdmin, runtimeState, sendGroupMessages } from '@/core/bot';
 import storage from '@/core/storage';
 import scheduler, { type ScheduledJob } from '@/core/scheduler';
-import { logError, logInfo } from '@/core/logger';
+import { logDebug, logError, logInfo } from '@/core/logger';
 import { getLatestTweets } from '@/service/twitter/tweet';
 import { createMsgFromTweetId } from '@/service/twitter/message';
 
@@ -43,7 +43,7 @@ async function pushLatestTweetForUser(username: string, groupIds: string[], late
 
   tweetFailRecords.delete(username);
   storage.setTwitterLatestTweetTime(username, latestTweet.time);
-  logInfo('TwitterTask', `推送 ${username} 推文 ${latestTweet.tweetId} 到 ${groupIds.length} 个群`);
+  logInfo('TwitterTask', `推送 ${username} 推文 ${latestTweet.tweetId} 到 ${groupIds.length} 个群: ${groupIds.join(', ')}`);
   for (const groupId of groupIds) {
     await sendGroupMessages(groupId, msgs);
   }
@@ -71,6 +71,7 @@ async function checkLatestTweet() {
     return;
   }
   consecutiveFailCount = 0;
+  logDebug('TwitterTask', `拉取 ${usernames.length} 个账号完成，下次间隔 ${result.nextReadyInS ?? 60}s`);
 
   for (const username of usernames) {
     const groupIds = groupConfig[username];

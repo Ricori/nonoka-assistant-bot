@@ -39,9 +39,36 @@ function appendToFile(entry: LogEntry) {
   }
 }
 
+function safeStringify(value: unknown): string {
+  if (value instanceof Error) {
+    const extra: string[] = [];
+    const e = value as Error & {
+      code?: unknown;
+      response?: { status?: unknown; data?: unknown };
+    };
+    if (e.code) extra.push(`code=${String(e.code)}`);
+    if (e.response?.status) extra.push(`status=${String(e.response.status)}`);
+    if (e.response?.data !== undefined) {
+      try {
+        extra.push(`data=${typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)}`);
+      } catch {
+        extra.push(`data=${String(e.response.data)}`);
+      }
+    }
+    const base = value.stack || value.message;
+    return extra.length ? `${base} [${extra.join(', ')}]` : base;
+  }
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function emit(level: LogLevel, tag: string, parts: unknown[]) {
   const text = parts
-    .map((p) => (p instanceof Error ? p.stack || p.message : typeof p === 'string' ? p : JSON.stringify(p)))
+    .map(safeStringify)
     .join(' ');
   const entry: LogEntry = {
     id: nextId++,

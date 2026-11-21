@@ -2,7 +2,7 @@ import { AsyncTask, SimpleIntervalJob } from 'toad-scheduler';
 import { config } from '@/core/config';
 import { runtimeState, sendGroupMessages } from '@/core/bot';
 import storage from '@/core/storage';
-import { logError, logInfo } from '@/core/logger';
+import { logDebug, logError, logInfo } from '@/core/logger';
 import type { ScheduledJob } from '@/core/scheduler';
 import { buildYoutubeLiveMessage, getYoutubeLiveStatus } from '@/service/youtube/live';
 
@@ -16,13 +16,19 @@ async function checkYtLive(channelName: string, groupIds: string[]) {
     const isFirstCheck = !checkedChannels.has(channelName);
     checkedChannels.add(channelName);
 
-    if (!status.isLive || !status.videoId) return;
+    if (!status.isLive || !status.videoId) {
+      logDebug('YtLiveTask', `检查频道 ${channelName}: 未开播`);
+      return;
+    }
     if (storage.hasYtPushedVideoId(channelName, status.videoId)) return;
     storage.addYtPushedVideoId(channelName, status.videoId);
-    if (isFirstCheck) return;
+    if (isFirstCheck) {
+      logInfo('YtLiveTask', `首次检查频道 ${channelName} 已在直播 (${status.videoId})，跳过历史开播推送`);
+      return;
+    }
 
     const msg = await buildYoutubeLiveMessage(channelName, status);
-    logInfo('YtLiveTask', `推送 ${channelName} 开播 (${status.videoId}) 到 ${groupIds.length} 个群`);
+    logInfo('YtLiveTask', `推送 ${channelName} 开播 (${status.videoId}) 到 ${groupIds.length} 个群: ${groupIds.join(', ')}`);
     for (const groupId of groupIds) {
       await sendGroupMessages(groupId, [msg]);
     }
@@ -37,7 +43,7 @@ const task = new AsyncTask('ytLiveTask', async () => {
     .filter(([, groupIds]) => Array.isArray(groupIds) && groupIds.length > 0)
     .forEach(([channelName, groupIds], i) => {
       setTimeout(() => {
-        checkYtLive(channelName, groupIds).catch(() => {});
+        checkYtLive(channelName, groupIds).catch((err) => logError('YtLiveTask', `任务执行异常 (${channelName}):`, err));
       }, i * 1500);
     });
 });

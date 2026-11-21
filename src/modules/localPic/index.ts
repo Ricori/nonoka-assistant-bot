@@ -88,6 +88,7 @@ async function handleSendPicture(event: GroupMessageEvent, keyword: string) {
   const picPath = getRandomPicture(keyword);
   if (!picPath) return;
 
+  logInfo('LocalPic', `命中关键词「${keyword}」 group_openid=${event.group_id}`);
   const res = await event.reply(segment.image(picPath));
   const refIdx = res.ref_idx || res.ext_info?.ref_idx;
   recordSentPicture(refIdx, picPath);

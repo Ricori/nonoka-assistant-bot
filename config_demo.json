@@ -1,4 +1,13 @@
 {
+  "qqBot": {
+    "appid": "",
+    "secret": "",
+    "mode": "websocket",
+    "webhookPort": 3000,
+    "webhookPath": "/webhook",
+    "logLevel": "info"
+  },
+  "puppeteerExecutablePath": "",
   "admin": [],
   "nonokaService": {
     "baseUrl": "",

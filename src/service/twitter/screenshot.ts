@@ -1,4 +1,5 @@
 import puppeteer, { type Browser } from 'puppeteer';
+import { config } from '@/core/config';
 import { logError } from '@/core/logger';
 import type { TweetPost } from './tweet';
 
@@ -101,7 +102,7 @@ function createHtml(d: TweetDisplayData) {
 let browserPromise: Promise<Browser> | null = null;
 
 function launchBrowser() {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim() || undefined;
+  const executablePath = config.puppeteerExecutablePath?.trim() || undefined;
   const promise = puppeteer.launch({
     headless: true,
     executablePath,

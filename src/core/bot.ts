@@ -2,14 +2,14 @@ import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
 import { config } from './config';
 import { logError, logInfo } from './logger';
 
-const appid = process.env.QQ_APPID?.trim();
-const secret = process.env.QQ_SECRET?.trim();
+const appid = config.qqBot.appid.trim();
+const secret = config.qqBot.secret.trim();
 if (!appid || !secret) {
-  throw new Error('请先在 .env 中填写 QQ_APPID 和 QQ_SECRET');
+  throw new Error('请先在 config.json 的 qqBot 中填写 appid 和 secret');
 }
 
-export const botMode = process.env.QQ_MODE === 'webhook' ? ReceiverMode.WEBHOOK : ReceiverMode.WEBSOCKET;
-const logLevel = (process.env.QQ_LOG_LEVEL as 'trace' | 'debug' | 'info' | 'warn' | 'error') || 'info';
+export const botMode = config.qqBot.mode === 'webhook' ? ReceiverMode.WEBHOOK : ReceiverMode.WEBSOCKET;
+const { logLevel } = config.qqBot;
 
 export const bot = botMode === ReceiverMode.WEBHOOK
   ? new Bot({
@@ -19,8 +19,8 @@ export const bot = botMode === ReceiverMode.WEBHOOK
     logLevel,
     intents: ['GROUP_AND_C2C_EVENT'],
     mode: ReceiverMode.WEBHOOK,
-    port: Number(process.env.QQ_WEBHOOK_PORT || 3000),
-    path: process.env.QQ_WEBHOOK_PATH || '/webhook',
+    port: config.qqBot.webhookPort,
+    path: config.qqBot.webhookPath,
   })
   : new Bot({
     appid,

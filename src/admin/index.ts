@@ -4,7 +4,7 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { botMode, runtimeState } from '@/core/bot';
-import { applyPanelConfig, getRedactedConfig, type AssistantConfig } from '@/core/config';
+import { applyPanelConfig, getRedactedConfig, type PanelEditableConfig } from '@/core/config';
 import { getRecentLogs, logError, logInfo, subscribeLogs } from '@/core/logger';
 import scheduler from '@/core/scheduler';
 import storage from '@/core/storage';
@@ -41,7 +41,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-function validatePatch(v: unknown): v is Omit<AssistantConfig, 'nonokaService' | 'apiKeys'> {
+function validatePatch(v: unknown): v is PanelEditableConfig {
   if (!isRecord(v)) return false;
   return Array.isArray(v.admin)
     && isRecord(v.tweetPush)

@@ -3,5 +3,5 @@ dist/
 logs/
 data/picture
 *.log
-.env
 config.json
+ecosystem.config.cjs

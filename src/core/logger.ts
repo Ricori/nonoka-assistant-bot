@@ -16,8 +16,13 @@ const LOG_DIR = path.resolve('logs');
 const LOG_FILE = path.join(LOG_DIR, 'assistant.log');
 
 let nextId = 1;
+let currentLogLevel = 'info';
 const buffer: LogEntry[] = [];
 const listeners = new Set<(entry: LogEntry) => void>();
+
+export function setLogLevel(level: string) {
+  currentLogLevel = level || 'info';
+}
 
 function nowString() {
   const d = new Date();
@@ -77,7 +82,7 @@ export function logError(tag: string, ...parts: unknown[]) {
 }
 
 export function logDebug(tag: string, ...parts: unknown[]) {
-  if (process.env.QQ_LOG_LEVEL === 'debug' || process.env.QQ_LOG_LEVEL === 'trace') {
+  if (currentLogLevel === 'debug' || currentLogLevel === 'trace') {
     emit('debug', tag, parts);
   }
 }

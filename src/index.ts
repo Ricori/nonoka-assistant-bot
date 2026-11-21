@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { GroupMessageEvent, PrivateMessageEvent } from 'qq-official-bot';
 import { bot, botMode, runtimeState } from '@/core/bot';
 import { syncGroupCommandPanel } from '@/core/commandPanel';

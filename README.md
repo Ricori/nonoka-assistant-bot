@@ -20,12 +20,19 @@ QQ 官方功能机器人，承接从 `nonoka-ai` 拆分出来的工具与推送�
    ```bash
    yarn install
    ```
-2. 复制 `.env.example` 为 `.env`，填写 `QQ_APPID`、`QQ_SECRET`（及可选 `ADMIN_PORT` / `ADMIN_TOKEN`）。
-3. 复制 `config_demo.json` 为 `config.json`，填写 `nonokaService` 和 `apiKeys`（其余订阅配置与白名单可在 Web 面板中热修改）。
-4. 启动：
+2. 复制 `config_demo.json` 为 `config.json`，填写 `qqBot`（`appid` / `secret`）、`nonokaService` 和 `apiKeys`（其余订阅配置与白名单可在 Web 面板中热修改）。
+3. 启动：
    ```bash
    yarn dev
    ```
+
+## 服务器 PM2 部署
+
+复制 `ecosystem_demo.config.cjs` 为 `ecosystem.config.cjs`，按需修改 `ADMIN_HOST` / `ADMIN_PORT` / `ADMIN_TOKEN` 后启动：
+
+```bash
+pm2 start ecosystem.config.cjs
+```
 
 ## 指令速查
 

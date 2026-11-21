@@ -61,7 +61,7 @@ export async function buildYoutubeLiveMessage(channelName: string, status: Youtu
 
   return [
     segment.markdown(lines.join('\n\n')),
-    createUrlButton('1', '观看直播', liveUrl, 4),
-    createUrlButton('2', '实时同传', translateUrl, 4),
+    createUrlButton('1', '实时同传', translateUrl, 0),
+    createUrlButton('2', '观看直播', liveUrl, 4),
   ];
 }

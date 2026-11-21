@@ -200,8 +200,8 @@ export async function buildBiliMessage(uid: string, dy: BiliPost): Promise<Senda
     const majorLabel = majorUrl.includes('/video/') ? '观看视频' : '查看详情';
     return [
       md,
-      createUrlButton('1', majorLabel, majorUrl, 4),
-      createUrlButton('2', '查看动态', dyUrl, 4),
+      createUrlButton('1', '查看动态', dyUrl, 0),
+      createUrlButton('2', majorLabel, majorUrl, 4),
     ];
   }
 

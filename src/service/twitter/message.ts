@@ -1,6 +1,7 @@
 import { segment, type Sendable } from 'qq-official-bot';
 import { logWarn } from '@/core/logger';
 import { uploadBufferAsMarkdownImage, uploadUrlAsMarkdownImage } from '@/service/material';
+import { createUrlButton } from '@/utils/message';
 import { getTweetPost } from './tweet';
 import { createTweetScreenshot } from './screenshot';
 
@@ -40,8 +41,17 @@ export async function createMsgFromTweetId(tweetId: string): Promise<Sendable[] 
     if (imgMd) mdLines.push(imgMd);
     else messages.push(segment.image(url));
   }
-  mdLines.push(`[查看原推文](${tweet.link})`);
-  messages.push(segment.markdown(mdLines.join('\n\n')));
+  if (mdLines.length > 0) {
+    messages.push([
+      segment.markdown(mdLines.join('\n\n')),
+      createUrlButton('1', '查看原推文', tweet.link, 4),
+    ]);
+  } else {
+    messages.push([
+      segment.markdown(`### ${tweet.username} (@${tweet.userScreenName})`),
+      createUrlButton('1', '查看原推文', tweet.link, 4),
+    ]);
+  }
 
   for (const videoUrl of tweet.videoUrls.slice(0, 3)) {
     messages.push(segment.video(videoUrl));

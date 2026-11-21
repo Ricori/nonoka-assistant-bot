@@ -1,6 +1,7 @@
 import { segment, type Sendable } from 'qq-official-bot';
 import { logError } from '@/core/logger';
 import { uploadUrlAsMarkdownImage } from '@/service/material';
+import { createUrlButton } from '@/utils/message';
 import saucenaoSearch from './saucenao';
 import whatAnimeSearch from './whatanime';
 import { searchImageText } from './text';
@@ -14,16 +15,22 @@ export default async function searchImage(imgUrls: string[]): Promise<Sendable[]
 
       const lines = [
         `### ${sn.displayTitle}`,
-        `- 相似度：**${sn.similarity}%**`,
+        `相似度：**${sn.similarity}%**${sn.creator ? ` · 作者：${sn.creator}` : ''}`,
       ];
       if (sn.thumbnail) {
         const thumbMd = await uploadUrlAsMarkdownImage(sn.thumbnail, { alt: '缩略图', fileNamePrefix: 'sn_thumb' });
         if (thumbMd) lines.push(thumbMd);
       }
-      if (sn.url) lines.push(`- 作品来源：[点击查看](${sn.url})`);
-      if (sn.creator) lines.push(`- 作者：${sn.creator}`);
-      if (sn.memberUrl) lines.push(`- 作者主页：[Pixiv 主页](${sn.memberUrl})`);
-      results.push(segment.markdown(lines.join('\n')));
+
+      const md = segment.markdown(lines.join('\n\n'));
+      const buttons = [];
+      if (sn.memberUrl) {
+        buttons.push(createUrlButton('1', '作者主页', sn.memberUrl, sn.url ? 0 : 4));
+      }
+      if (sn.url) {
+        buttons.push(createUrlButton(String(buttons.length + 1), '查看来源', sn.url, 4));
+      }
+      results.push(buttons.length > 0 ? [md, ...buttons] : md);
 
       if (sn.isAnime) {
         const wa = await whatAnimeSearch(imgUrl);

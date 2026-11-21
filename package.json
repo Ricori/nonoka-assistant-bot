@@ -1,7 +1,7 @@
 {
   "name": "nonoka-assistant-bot",
   "version": "0.2.0",
-  "description": "Nonoka Assistant QQ Official Bot (push, image search, local gallery)",
+  "description": "Nonoka Assistant QQ Official Bot",
   "type": "module",
   "private": true,
   "scripts": {

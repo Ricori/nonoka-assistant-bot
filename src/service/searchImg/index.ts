@@ -1,5 +1,6 @@
 import { segment, type Sendable } from 'qq-official-bot';
 import { logError } from '@/core/logger';
+import { uploadUrlAsMarkdownImage } from '@/service/material';
 import saucenaoSearch from './saucenao';
 import whatAnimeSearch from './whatanime';
 import { searchImageText } from './text';
@@ -15,7 +16,10 @@ export default async function searchImage(imgUrls: string[]): Promise<Sendable[]
         `### ${sn.displayTitle}`,
         `- 相似度：**${sn.similarity}%**`,
       ];
-      if (sn.thumbnail) lines.push(`![缩略图](${sn.thumbnail})`);
+      if (sn.thumbnail) {
+        const thumbMd = await uploadUrlAsMarkdownImage(sn.thumbnail, { alt: '缩略图', fileNamePrefix: 'sn_thumb' });
+        if (thumbMd) lines.push(thumbMd);
+      }
       if (sn.url) lines.push(`- 作品来源：[点击查看](${sn.url})`);
       if (sn.creator) lines.push(`- 作者：${sn.creator}`);
       if (sn.memberUrl) lines.push(`- 作者主页：[Pixiv 主页](${sn.memberUrl})`);
@@ -28,7 +32,10 @@ export default async function searchImage(imgUrls: string[]): Promise<Sendable[]
             `### 番剧定位（相似度 ${wa.similarity}%）`,
             `- 截图出自：第 ${wa.episode} 集 ${wa.time}`,
           ];
-          if (wa.cover) waLines.push(`![封面](${wa.cover})`);
+          if (wa.cover) {
+            const coverMd = await uploadUrlAsMarkdownImage(wa.cover, { alt: '封面', fileNamePrefix: 'wa_cover' });
+            if (coverMd) waLines.push(coverMd);
+          }
           if (wa.titles?.length) waLines.push(`- 片名：${wa.titles.join(' / ')}`);
           if (wa.typeFormat) waLines.push(`- 类型：${wa.typeFormat}`);
           if (wa.startDate) waLines.push(`- 开播时间：${wa.startDate}`);

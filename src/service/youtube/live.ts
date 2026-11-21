@@ -3,6 +3,8 @@ import { segment, type Sendable } from 'qq-official-bot';
 import { config } from '@/core/config';
 import { logError } from '@/core/logger';
 import { rewriteToCDN } from '@/service/cdn';
+import { uploadUrlAsMarkdownImage } from '@/service/material';
+import { createUrlButton } from '@/utils/message';
 
 export interface YoutubeLiveStatus {
   isLive: boolean;
@@ -28,12 +30,38 @@ export async function getYoutubeLiveStatus(channelName: string): Promise<Youtube
   }
 }
 
-export function buildYoutubeLiveMessage(channelName: string, status: YoutubeLiveStatus): Sendable {
-  const lines = [`### ${status.title ?? '直播'} 开始了！`];
-  if (status.thumbnail) {
-    lines.push(`![封面](${rewriteToCDN(status.thumbnail)})`);
+async function buildThumbnailMarkdown(videoId: string | undefined, rawThumb?: string): Promise<string | null> {
+  const candidates = [
+    rawThumb,
+    videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : undefined,
+    videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : undefined,
+  ]
+    .filter((u): u is string => Boolean(u))
+    .map((u) => rewriteToCDN(u));
+
+  for (const url of [...new Set(candidates)]) {
+    const imgMd = await uploadUrlAsMarkdownImage(url, {
+      alt: '封面',
+      fileNamePrefix: `yt_${videoId || 'live'}`,
+    });
+    if (imgMd) return imgMd;
   }
-  lines.push(`- 直播链接：[点击观看](https://www.youtube.com/watch?v=${status.videoId})`);
-  lines.push(`- 实时翻译：[打开同传](https://nonoka.live/live?channel=@${channelName})`);
-  return segment.markdown(lines.join('\n'));
+  return null;
+}
+
+export async function buildYoutubeLiveMessage(channelName: string, status: YoutubeLiveStatus): Promise<Sendable> {
+  const lines = [`### ${status.title ?? `${channelName} 直播`} 开始了！`];
+  const imgMd = await buildThumbnailMarkdown(status.videoId, status.thumbnail);
+  if (imgMd) {
+    lines.push(imgMd);
+  }
+
+  const liveUrl = `https://www.youtube.com/watch?v=${status.videoId}`;
+  const translateUrl = `https://nonoka.live/live?channel=@${encodeURIComponent(channelName)}`;
+
+  return [
+    segment.markdown(lines.join('\n\n')),
+    createUrlButton('1', '观看直播', liveUrl, 4),
+    createUrlButton('2', '实时同传', translateUrl, 4),
+  ];
 }

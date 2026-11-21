@@ -21,7 +21,7 @@ async function checkYtLive(channelName: string, groupIds: string[]) {
     storage.addYtPushedVideoId(channelName, status.videoId);
     if (isFirstCheck) return;
 
-    const msg = buildYoutubeLiveMessage(channelName, status);
+    const msg = await buildYoutubeLiveMessage(channelName, status);
     logInfo('YtLiveTask', `推送 ${channelName} 开播 (${status.videoId}) 到 ${groupIds.length} 个群`);
     for (const groupId of groupIds) {
       await sendGroupMessages(groupId, [msg]);

@@ -16,23 +16,6 @@ const TASK_IDS = new Map([
   ['youtube', 'ytLivePush'],
 ]);
 
-const HELP_TEXT = [
-  '=== Nonoka Assistant 指令 ===',
-  '/help                           查看帮助与当前会话 ID',
-  '/ping                           连通性检查',
-  '/p <推文链接或ID>                推送指定推文到当前会话',
-  '/tts <文本>                     文字转语音（带假名自动按日文念）',
-  '/ban <@某人|member_openid> [分钟] 管理员禁言成员（默认10分钟，0解除）',
-  '/加图 <关键词>                   附带或引用图片入库',
-  '/删图                           管理员引用 bot 发的图删除',
-  '@bot 搜图 / 来源                 附带或引用图片以图搜源',
-  '',
-  '--- 管理员指令 ---',
-  '/task <twitter|bilibili|youtube> <on|off>   控制定时推送任务',
-  '/p <group_openid> <推文链接或ID>             推送推文到指定群',
-  '/inspect                                    打印消息调试信息',
-].join('\n');
-
 async function handleTTS(event: IncomingMessageEvent, text: string) {
   const lang = /[぀-ヿ]/.test(text) ? 'ja' : 'zh';
   if (text.trim().length > TTS_MAX_TOTAL_LENGTH) {
@@ -108,14 +91,6 @@ export async function handleCommand(event: IncomingMessageEvent): Promise<boolea
   if (!cleanText.startsWith('/')) return false;
 
   const isGroup = event instanceof GroupMessageEvent;
-
-  if (cleanText === '/help') {
-    const meta = isGroup
-      ? `group_openid: ${event.group_id}\nuser_id: ${event.user_id}`
-      : `user_id: ${event.user_id}`;
-    await event.reply(`${HELP_TEXT}\n\n${meta}`);
-    return true;
-  }
 
   if (cleanText === '/ping') {
     await event.reply(`pong! (${new Date().toLocaleTimeString('zh-CN', { hour12: false })})`);

@@ -12,7 +12,7 @@ async function checkBiliDynamic(uid: string, groupIds: string[]) {
     if (!dy || dy.pubDate <= storage.getBiliLatestDynamicTime(uid)) return;
     storage.setBiliLatestDynamicTime(uid, dy.pubDate);
 
-    const msg = buildBiliMessage(uid, dy);
+    const msg = await buildBiliMessage(uid, dy);
     if (!msg) return;
     logInfo('BiliTask', `推送 UP(${uid}) 动态到 ${groupIds.length} 个群`);
     for (const groupId of groupIds) {

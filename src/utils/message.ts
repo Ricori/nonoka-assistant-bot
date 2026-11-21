@@ -1,4 +1,4 @@
-import { GroupMessageEvent, PrivateMessageEvent, type MessageElement, type Sendable } from 'qq-official-bot';
+import { GroupMessageEvent, PrivateMessageEvent, segment, type MessageElement, type Sendable } from 'qq-official-bot';
 import storage from '@/core/storage';
 
 export type IncomingMessageEvent = GroupMessageEvent | PrivateMessageEvent;
@@ -67,4 +67,22 @@ export function extractImagesWithQuote(event: IncomingMessageEvent): string[] {
 
   urls.push(...getOwnImageUrls(event.message));
   return [...new Set(urls)];
+}
+
+/** 创建 QQ 底部跳转按钮（style: 0 灰线框 / 1 蓝线框 / 3 白底红字 / 4 蓝底白字） */
+export function createUrlButton(id: string, label: string, url: string, style: 0 | 1 | 3 | 4 = 4) {
+  return segment.button({
+    id,
+    render_data: {
+      label,
+      visited_label: label,
+      style,
+    },
+    action: {
+      type: 0,
+      permission: { type: 2 },
+      data: url,
+      unsupport_tips: '当前版本暂不支持此按钮',
+    },
+  });
 }

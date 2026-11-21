@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { segment, type Sendable } from 'qq-official-bot';
 import { logError } from '@/core/logger';
-import { sleep } from '@/utils/message';
+import { uploadUrlAsMarkdownImage } from '@/service/material';
+import { createUrlButton, sleep } from '@/utils/message';
 import {
   UA, getCookie, prepareSession, signWbi,
 } from './session';
@@ -11,6 +12,7 @@ export interface BiliPost {
   link: string;
   description: string;
   images: string[];
+  authorAvatar?: string;
   pubDate: number;
   dylink: string;
   majorUrl?: string;
@@ -31,11 +33,16 @@ const DM_PARAMS = {
   dm_img_inter: '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
 };
 
-const DESC_LIMIT = 150;
+const DESC_LIMIT = 180;
 const MAX_IMAGES = 3;
 const DAILY_DIGEST_UID = '629994228';
 
-const fullUrl = (url?: string) => (url?.startsWith('//') ? `https:${url}` : url ?? '');
+const fullUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('http://')) return `https://${url.slice(7)}`;
+  return url;
+};
 
 async function fetchSpaceFeed(uid: string): Promise<{ items?: any[]; reason?: string }> {
   const query = signWbi({
@@ -140,9 +147,10 @@ function toPost(uid: string, item: any): BiliPost {
     link: `https://space.bilibili.com/${uid}/dynamic`,
     description,
     images: images.filter(Boolean).map(fullUrl),
+    authorAvatar: fullUrl(item.modules?.module_author?.face) || undefined,
     pubDate: (item.modules?.module_author?.pub_ts ?? 0) * 1000,
     dylink: `https://t.bilibili.com/${item.id_str}`,
-    majorUrl: self.major.url || undefined,
+    majorUrl: self.major.url ? fullUrl(self.major.url) : undefined,
   };
 }
 
@@ -168,17 +176,37 @@ export async function getBiliDynamic(uid: string): Promise<BiliPost | undefined>
   }
 }
 
-export function buildBiliMessage(uid: string, dy: BiliPost): Sendable | null {
+export async function buildBiliMessage(uid: string, dy: BiliPost): Promise<Sendable | null> {
   if (uid === DAILY_DIGEST_UID && dy.description.includes('今日速览')) {
     return dy.images[0] ? segment.image(dy.images[0]) : null;
   }
 
   const lines = [`### ${dy.title}`];
   if (dy.description) lines.push(dy.description);
+
   for (const img of dy.images.slice(0, MAX_IMAGES)) {
-    lines.push(`![动态配图](${img})`);
+    const imgMd = await uploadUrlAsMarkdownImage(img, {
+      alt: '动态配图',
+      fileNamePrefix: `bili_${uid}`,
+    });
+    if (imgMd) lines.push(imgMd);
   }
-  const targetUrl = dy.majorUrl || dy.dylink;
-  lines.push(`[查看原动态](${targetUrl})`);
-  return segment.markdown(lines.join('\n\n'));
+
+  const md = segment.markdown(lines.join('\n\n'));
+  const majorUrl = fullUrl(dy.majorUrl);
+  const dyUrl = fullUrl(dy.dylink);
+
+  if (majorUrl && majorUrl !== dyUrl) {
+    const majorLabel = majorUrl.includes('/video/') ? '观看视频' : '查看详情';
+    return [
+      md,
+      createUrlButton('1', majorLabel, majorUrl, 4),
+      createUrlButton('2', '查看动态', dyUrl, 4),
+    ];
+  }
+
+  return [
+    md,
+    createUrlButton('1', '查看原动态', dyUrl, 4),
+  ];
 }

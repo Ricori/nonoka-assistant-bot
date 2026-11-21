@@ -1,6 +1,6 @@
 import { segment, type Sendable } from 'qq-official-bot';
-import { bot } from '@/core/bot';
 import { logWarn } from '@/core/logger';
+import { uploadBufferAsMarkdownImage, uploadUrlAsMarkdownImage } from '@/service/material';
 import { getTweetPost } from './tweet';
 import { createTweetScreenshot } from './screenshot';
 
@@ -15,11 +15,12 @@ export async function createMsgFromTweetId(tweetId: string): Promise<Sendable[] 
   const screenshotBuf = await createTweetScreenshot(tweet);
   if (screenshotBuf) {
     try {
-      const uploaded = await bot.materialService.uploadImage(screenshotBuf, {
-        fileName: `tweet_${tweetId}.png`,
+      const imgMd = await uploadBufferAsMarkdownImage(screenshotBuf, {
+        alt: '推文截图',
+        fileNamePrefix: `tweet_${tweetId}`,
         contentType: 'image/png',
       });
-      mdLines.push(`![推文截图](${uploaded.url})`);
+      mdLines.push(imgMd);
     } catch (err) {
       logWarn('Twitter', `素材接口上传截图失败，退回普通图片发送: ${err instanceof Error ? err.message : String(err)}`);
       messages.push(segment.image(screenshotBuf));
@@ -32,7 +33,12 @@ export async function createMsgFromTweetId(tweetId: string): Promise<Sendable[] 
   }
 
   for (const url of tweet.imgUrls.slice(0, 3)) {
-    mdLines.push(`![推文图片](${url})`);
+    const imgMd = await uploadUrlAsMarkdownImage(url, {
+      alt: '推文图片',
+      fileNamePrefix: `tweet_media_${tweetId}`,
+    });
+    if (imgMd) mdLines.push(imgMd);
+    else messages.push(segment.image(url));
   }
   mdLines.push(`[查看原推文](${tweet.link})`);
   messages.push(segment.markdown(mdLines.join('\n\n')));

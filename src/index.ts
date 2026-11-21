@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { GroupMessageEvent, PrivateMessageEvent } from 'qq-official-bot';
 import { bot, botMode, runtimeState } from '@/core/bot';
+import { syncGroupCommandPanel } from '@/core/commandPanel';
 import { logError, logInfo } from '@/core/logger';
 import scheduler from '@/core/scheduler';
 import storage from '@/core/storage';
@@ -55,6 +56,7 @@ async function main() {
 
   await bot.start();
   runtimeState.ready = true;
+  await syncGroupCommandPanel();
   logInfo('Main', `nonoka-assistant-bot 已启动 (mode=${botMode})`);
 }
 

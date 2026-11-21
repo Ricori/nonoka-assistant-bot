@@ -3,7 +3,7 @@ const path = require('path');
 module.exports = {
   apps: [
     {
-      name: 'nonoka-assistant',
+      name: 'nonoka-assistant-bot',
       script: path.join(__dirname, 'src/index.ts'),
       interpreter: 'node',
       interpreter_args: '--import tsx',

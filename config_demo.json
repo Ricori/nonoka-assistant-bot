@@ -1,0 +1,37 @@
+{
+  "admin": [],
+  "nonokaService": {
+    "baseUrl": "",
+    "apiKey": "",
+    "cdnHost": ""
+  },
+  "apiKeys": {
+    "saucenao": "",
+    "lolicon": ""
+  },
+  "biliDynamicPush": {
+    "enable": false,
+    "config": {
+      "13184888": []
+    },
+    "cookie": "",
+    "refreshToken": ""
+  },
+  "tweetPush": {
+    "enable": false,
+    "config": {
+      "hiiragi_yuka530": []
+    }
+  },
+  "ytLivePush": {
+    "enable": false,
+    "config": {
+      "@Kotoha_ktnh": []
+    }
+  },
+  "hPic": {
+    "enable": false,
+    "whiteGroupIds": [],
+    "enableR18": false
+  }
+}

@@ -119,7 +119,7 @@ async function getBrowser(): Promise<Browser> {
   const current = browserPromise;
   if (!current) return launchBrowser();
   const browser = await current.catch(() => null);
-  if (browser && browser.connected) return browser;
+  if (browser && browser.isConnected()) return browser;
   if (browserPromise === current) return launchBrowser();
   return getBrowser();
 }
@@ -144,12 +144,12 @@ export async function createTweetScreenshot(data: TweetPost): Promise<Buffer | u
 
   try {
     await page.setViewport({ width: 598, height: 1000, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: 'load', timeout: 20000 });
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 20000 });
 
     const el = await page.$('.tweet');
     if (!el) return undefined;
     const raw = await el.screenshot({ type: 'png' });
-    return Buffer.from(raw);
+    return Buffer.isBuffer(raw) ? raw : Buffer.from(raw, 'base64');
   } catch (err) {
     logError('Twitter', `生成推文截图失败: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;

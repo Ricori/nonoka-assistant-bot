@@ -37,6 +37,11 @@ export interface AssistantConfig {
     whiteGroupIds: string[];
     enableR18: boolean;
   };
+  repeater: {
+    enable: boolean;
+    /** 复读机黑名单群 group_openid */
+    blackList: string[];
+  };
 }
 
 export const CONFIG_PATH = path.resolve('config.json');
@@ -50,6 +55,7 @@ function createDefaultConfig(): AssistantConfig {
     tweetPush: { enable: false, config: {} },
     ytLivePush: { enable: false, config: {} },
     hPic: { enable: false, whiteGroupIds: [], enableR18: false },
+    repeater: { enable: true, blackList: [] },
   };
 }
 
@@ -78,6 +84,11 @@ function mergeWithDefault(raw: Partial<AssistantConfig>): AssistantConfig {
       ...def.hPic,
       ...(raw.hPic ?? {}),
       whiteGroupIds: Array.isArray(raw.hPic?.whiteGroupIds) ? raw.hPic.whiteGroupIds.map(String) : def.hPic.whiteGroupIds,
+    },
+    repeater: {
+      ...def.repeater,
+      ...(raw.repeater ?? {}),
+      blackList: Array.isArray(raw.repeater?.blackList) ? raw.repeater.blackList.map(String) : def.repeater.blackList,
     },
   };
 }

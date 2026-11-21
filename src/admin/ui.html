@@ -216,7 +216,7 @@
     </div>
     <button class="nav-btn active" data-tab="overview">总览与任务</button>
     <button class="nav-btn" data-tab="push">推送订阅</button>
-    <button class="nav-btn" data-tab="features">涩图与权限</button>
+    <button class="nav-btn" data-tab="features">功能与权限</button>
     <button class="nav-btn" data-tab="logs">实时日志 <span class="nav-dot" id="sseDot" title="日志流连接状态"></span></button>
     <div class="nav-footer">
       <div>密钥仅通过磁盘 <code>config.json</code> 管理</div>
@@ -333,8 +333,22 @@
         </div>
       </section>
 
-      <!-- 涩图与权限 -->
+      <!-- 功能与权限 -->
       <section class="panel" id="tab-features">
+        <div class="card">
+          <div class="card-head">
+            <h2>复读机（Repeater）</h2>
+            <label class="switch"><input type="checkbox" id="repeaterEnable"><span class="slider"></span></label>
+          </div>
+          <div class="form-row top">
+            <label>黑名单群</label>
+            <div>
+              <textarea id="repeaterBlackList" placeholder="填 group_openid，逗号或换行分隔"></textarea>
+              <div class="hint" style="margin-top:6px">黑名单中的群不触发自动复读</div>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <h2>涩图功能（HPic）</h2>
@@ -391,7 +405,7 @@
 
 <script>
   const token = new URLSearchParams(location.search).get('token') || '';
-  const TITLES = { overview: '总览与任务', push: '推送订阅', features: '涩图与权限', logs: '实时日志' };
+  const TITLES = { overview: '总览与任务', push: '推送订阅', features: '功能与权限', logs: '实时日志' };
 
   function withToken(pathname) {
     return pathname + (pathname.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
@@ -477,6 +491,9 @@
     document.getElementById('hPicEnable').checked = !!cfg.hPic?.enable;
     document.getElementById('hPicR18').checked = !!cfg.hPic?.enableR18;
     document.getElementById('hPicWhiteList').value = (cfg.hPic?.whiteGroupIds || []).join(', ');
+
+    document.getElementById('repeaterEnable').checked = !!cfg.repeater?.enable;
+    document.getElementById('repeaterBlackList').value = (cfg.repeater?.blackList || []).join(', ');
   }
 
   function collectConfig() {
@@ -500,6 +517,10 @@
         enable: document.getElementById('hPicEnable').checked,
         enableR18: document.getElementById('hPicR18').checked,
         whiteGroupIds: parseStrList(document.getElementById('hPicWhiteList').value),
+      },
+      repeater: {
+        enable: document.getElementById('repeaterEnable').checked,
+        blackList: parseStrList(document.getElementById('repeaterBlackList').value),
       },
     };
   }

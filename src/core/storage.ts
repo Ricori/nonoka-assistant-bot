@@ -3,6 +3,12 @@ interface CachedMessage {
   text: string;
 }
 
+interface RepeaterLog {
+  msg: string;
+  times: number;
+  done: boolean;
+}
+
 const MSG_CACHE_LIMIT = 2000;
 const YT_HISTORY_LIMIT = 10;
 
@@ -10,6 +16,8 @@ class AssistantStorage {
   private latestSNSUpdateTime = new Map<string, number>();
 
   private ytPushedVideoIds = new Map<string, string[]>();
+
+  private repeaterData = new Map<string, RepeaterLog>();
 
   /** 最近群消息 msg_idx → 图片与文本缓存，用于引用搜图和 /加图兜底 */
   private recentMessages = new Map<string, CachedMessage>();
@@ -68,6 +76,23 @@ class AssistantStorage {
     return [...this.seenGroups.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([groupId, lastSeenAt]) => ({ groupId, lastSeenAt }));
+  }
+
+  /** 记录某群连续相同消息数，已复读过返回 0 */
+  saveRepeaterLog(groupId: string, msg: string): number {
+    const logObj = this.repeaterData.get(groupId);
+    if (!logObj || logObj.msg !== msg) {
+      this.repeaterData.set(groupId, { msg, times: 1, done: false });
+      return 1;
+    }
+    if (logObj.done) return 0;
+    logObj.times += 1;
+    return logObj.times;
+  }
+
+  setRepeaterDone(groupId: string) {
+    const logObj = this.repeaterData.get(groupId);
+    if (logObj) logObj.done = true;
   }
 }
 

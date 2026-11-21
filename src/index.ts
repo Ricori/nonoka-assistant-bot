@@ -9,6 +9,7 @@ import { handleCommand } from '@/modules/command';
 import { handleImageSearch } from '@/modules/imageSearch';
 import { handleLocalPic } from '@/modules/localPic';
 import { handleHPic } from '@/modules/hPic';
+import { handleRepeater } from '@/modules/repeater';
 import BilibiliPushJob from '@/tasks/bilibili';
 import TwitterPushJob from '@/tasks/twitter';
 import YtLivePushJob from '@/tasks/youtube';
@@ -21,7 +22,8 @@ async function dispatchGroup(event: GroupMessageEvent) {
   if (await handleCommand(event)) return;
   if (await handleImageSearch(event)) return;
   if (await handleLocalPic(event)) return;
-  await handleHPic(event);
+  if (await handleHPic(event)) return;
+  await handleRepeater(event);
 }
 
 async function dispatchPrivate(event: PrivateMessageEvent) {

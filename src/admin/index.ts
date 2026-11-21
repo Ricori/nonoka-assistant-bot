@@ -47,7 +47,8 @@ function validatePatch(v: unknown): v is Omit<AssistantConfig, 'nonokaService' |
     && isRecord(v.tweetPush)
     && isRecord(v.biliDynamicPush)
     && isRecord(v.ytLivePush)
-    && isRecord(v.hPic);
+    && isRecord(v.hPic)
+    && isRecord(v.repeater);
 }
 
 export class AssistantAdmin {

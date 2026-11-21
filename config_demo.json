@@ -33,5 +33,9 @@
     "enable": false,
     "whiteGroupIds": [],
     "enableR18": false
+  },
+  "repeater": {
+    "enable": true,
+    "blackList": []
   }
 }

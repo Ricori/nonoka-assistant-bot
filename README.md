@@ -1,6 +1,6 @@
-# nonoka-assistant-bot
+# Nonoka Assistant Bot
 
-QQ 官方功能机器人，承接从 `nonoka-ai` 拆分出来的工具与推送能力，自带实时日志与配置管理面板。
+QQ 官方功能机器人，是从 `Nonoka AI` 拆分出来的工具与推送能力，自带实时日志与配置管理面板。
 
 ## 功能
 

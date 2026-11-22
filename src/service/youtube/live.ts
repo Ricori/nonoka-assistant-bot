@@ -60,7 +60,7 @@ export async function buildYoutubeLiveMessage(channelName: string, status: Youtu
   const translateUrl = `https://nonoka.live/live?channel=@${encodeURIComponent(channelName)}`;
 
   return [
-    segment.markdown(lines.join('\n\n')),
+    segment.markdown(lines.join('\n\n'), imgMd ? { force_verify_image_resource: true } : undefined),
     createUrlButton('1', '实时同传', translateUrl, 0),
     createUrlButton('2', '观看直播', liveUrl, 4),
   ];

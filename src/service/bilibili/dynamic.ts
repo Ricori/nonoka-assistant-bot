@@ -176,37 +176,46 @@ export async function getBiliDynamic(uid: string): Promise<BiliPost | undefined>
   }
 }
 
-export async function buildBiliMessage(uid: string, dy: BiliPost): Promise<Sendable | null> {
+export async function buildBiliMessage(uid: string, dy: BiliPost): Promise<Sendable[] | null> {
   if (uid === DAILY_DIGEST_UID && dy.description.includes('今日速览')) {
-    return dy.images[0] ? segment.image(dy.images[0]) : null;
+    return dy.images[0] ? [segment.image(dy.images[0])] : null;
   }
 
   const lines = [`### ${dy.title}`];
   if (dy.description) lines.push(dy.description);
 
+  const fallbackImages: Sendable[] = [];
+  let hasMarkdownImage = false;
   for (const img of dy.images.slice(0, MAX_IMAGES)) {
     const imgMd = await uploadUrlAsMarkdownImage(img, {
       alt: '动态配图',
       fileNamePrefix: `bili_${uid}`,
     });
-    if (imgMd) lines.push(imgMd);
+    if (imgMd) {
+      lines.push(imgMd);
+      hasMarkdownImage = true;
+    } else {
+      fallbackImages.push(segment.image(img));
+    }
   }
 
-  const md = segment.markdown(lines.join('\n\n'));
+  const md = segment.markdown(
+    lines.join('\n\n'),
+    hasMarkdownImage ? { force_verify_image_resource: true } : undefined,
+  );
   const majorUrl = fullUrl(dy.majorUrl);
   const dyUrl = fullUrl(dy.dylink);
 
-  if (majorUrl && majorUrl !== dyUrl) {
-    const majorLabel = majorUrl.includes('/video/') ? '观看视频' : '查看详情';
-    return [
+  const card: Sendable = majorUrl && majorUrl !== dyUrl
+    ? [
       md,
       createUrlButton('1', '查看动态', dyUrl, 0),
-      createUrlButton('2', majorLabel, majorUrl, 4),
+      createUrlButton('2', majorUrl.includes('/video/') ? '观看视频' : '查看详情', majorUrl, 4),
+    ]
+    : [
+      md,
+      createUrlButton('1', '查看原动态', dyUrl, 4),
     ];
-  }
 
-  return [
-    md,
-    createUrlButton('1', '查看原动态', dyUrl, 4),
-  ];
+  return [card, ...fallbackImages];
 }

@@ -15,11 +15,11 @@ async function checkBiliDynamic(uid: string, groupIds: string[]) {
     }
     storage.setBiliLatestDynamicTime(uid, dy.pubDate);
 
-    const msg = await buildBiliMessage(uid, dy);
-    if (!msg) return;
+    const msgs = await buildBiliMessage(uid, dy);
+    if (!msgs?.length) return;
     logInfo('BiliTask', `推送 UP(${uid}) 动态到 ${groupIds.length} 个群: ${groupIds.join(', ')}`);
     for (const groupId of groupIds) {
-      await sendGroupMessages(groupId, [msg]);
+      await sendGroupMessages(groupId, msgs);
     }
   } catch (err) {
     logError('BiliTask', `检查 UID(${uid}) 异常:`, err);

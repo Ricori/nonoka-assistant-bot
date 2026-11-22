@@ -41,9 +41,10 @@ export async function createMsgFromTweetId(tweetId: string): Promise<Sendable[] 
     if (imgMd) mdLines.push(imgMd);
     else messages.push(segment.image(url));
   }
+  const hasMarkdownImage = mdLines.some((line) => line.startsWith('!['));
   if (mdLines.length > 0) {
     messages.push([
-      segment.markdown(mdLines.join('\n\n')),
+      segment.markdown(mdLines.join('\n\n'), hasMarkdownImage ? { force_verify_image_resource: true } : undefined),
       createUrlButton('1', '查看原推文', tweet.link, 4),
     ]);
   } else {

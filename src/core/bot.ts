@@ -1,7 +1,7 @@
 import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
 import { config } from './config';
 import { logDebug, logError, logInfo, logWarn } from './logger';
-import { summarizeSendable } from '@/utils/message';
+import { sleep, summarizeSendable } from '@/utils/message';
 
 const appid = config.qqBot.appid.trim();
 const secret = config.qqBot.secret.trim();
@@ -184,7 +184,38 @@ export const runtimeState = {
   ready: false,
 };
 
-/** 向指定群依次发送多条主动消息 */
+function hasForceVerifyMarkdown(message: Sendable): boolean {
+  const list = Array.isArray(message) ? message : [message];
+  return list.some(
+    (seg) => typeof seg === 'object'
+      && seg !== null
+      && seg.type === 'markdown'
+      && Boolean((seg.data as { force_verify_image_resource?: boolean } | undefined)?.force_verify_image_resource),
+  );
+}
+
+function withoutForceVerifyMarkdown(message: Sendable): Sendable {
+  const strip = (seg: Sendable): Sendable => {
+    if (typeof seg === 'object' && seg !== null && !Array.isArray(seg) && seg.type === 'markdown') {
+      const { force_verify_image_resource: _, ...rest } = seg.data as Record<string, unknown>;
+      return { ...seg, data: rest } as Sendable;
+    }
+    return seg;
+  };
+  return Array.isArray(message) ? message.map((item) => strip(item)) as Sendable : strip(message);
+}
+
+function isImageVerifyRetryableError(err: unknown): boolean {
+  const data = (err as { response?: { data?: { code?: number; message?: string } } })?.response?.data;
+  const code = data?.code;
+  // 消息频率/配额、无权限、目标无效等错误不应重试
+  if (code === 40034005 || code === 11281 || code === 11282 || code === 304023) return false;
+  const text = `${err instanceof Error ? err.message : String(err)} ${data?.message ?? ''}`;
+  if (/40034005|msg limit|message limit|permission|unauthorized|forbidden/i.test(text)) return false;
+  return code === 40034004 || /40034004|40035\d{3}|image|media|resource|转存|图片|timeout|ECONNRESET|ETIMEDOUT/i.test(text);
+}
+
+/** 向指定群依次发送多条主动消息（带 Markdown 图片强校验失败重试与降级兜底） */
 export async function sendGroupMessages(groupId: string, messages: Sendable[]) {
   let sent = 0;
   let failed = 0;
@@ -192,7 +223,27 @@ export async function sendGroupMessages(groupId: string, messages: Sendable[]) {
     try {
       await bot.group(groupId).send(msg);
       sent += 1;
-    } catch {
+    } catch (err) {
+      if (hasForceVerifyMarkdown(msg) && isImageVerifyRetryableError(err)) {
+        logWarn('Push', `Markdown 图片强校验发送失败，1.5s 后重试 group_openid=${groupId}`);
+        await sleep(1500);
+        try {
+          await bot.group(groupId).send(msg);
+          sent += 1;
+          continue;
+        } catch (retryErr) {
+          if (isImageVerifyRetryableError(retryErr)) {
+            logWarn('Push', `Markdown 图片强校验重试仍失败，降级关闭强校验发送 group_openid=${groupId}`);
+            try {
+              await bot.group(groupId).send(withoutForceVerifyMarkdown(msg));
+              sent += 1;
+              continue;
+            } catch {
+              // 失败已由 sendGroupMessage 拦截器记录
+            }
+          }
+        }
+      }
       failed += 1;
       // 发送失败已由 sendGroupMessage 拦截器记录，此处吞掉以继续后续发送
     }

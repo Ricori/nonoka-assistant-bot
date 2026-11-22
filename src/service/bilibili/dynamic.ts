@@ -34,8 +34,34 @@ const DM_PARAMS = {
 };
 
 const DESC_LIMIT = 180;
+const DESC_LINE_LIMIT = 7;
 const MAX_IMAGES = 3;
 const DAILY_DIGEST_UID = '629994228';
+
+function truncateDescription(raw: string): string {
+  const normalized = raw.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return '';
+
+  let truncated = false;
+  let text = normalized;
+
+  const lines = text.split('\n');
+  if (lines.length > DESC_LINE_LIMIT) {
+    text = lines.slice(0, DESC_LINE_LIMIT).join('\n');
+    truncated = true;
+  }
+
+  if (text.length > DESC_LIMIT) {
+    text = text.substring(0, DESC_LIMIT);
+    truncated = true;
+  }
+
+  text = text.trimEnd();
+  if (truncated && !/(?:\.\.\.|…)$/.test(text)) {
+    text = `${text}...`;
+  }
+  return text;
+}
 
 const fullUrl = (url?: string) => {
   if (!url) return '';
@@ -117,8 +143,7 @@ function parseMajor(major: any): MajorInfo {
 function parseContent(item: any) {
   const dyn = item.modules?.module_dynamic ?? {};
   const major = parseMajor(dyn.major);
-  let text = [dyn.desc?.text, major.text].filter(Boolean).join('\n').trim();
-  if (text.length > DESC_LIMIT) text = `${text.substring(0, DESC_LIMIT)}...`;
+  const text = [dyn.desc?.text, major.text].filter(Boolean).join('\n').trim();
   return {
     name: item.modules?.module_author?.name ?? '',
     major,
@@ -137,6 +162,8 @@ function toPost(uid: string, item: any): BiliPost {
     description += orig.name ? `\n//@${orig.name}: ${origTitle}${orig.text}` : `\n${orig.text}`;
     images = images.concat(orig.major.images);
   }
+
+  description = truncateDescription(description);
 
   const { title: rawTitle } = self.major;
   let title = `【${self.name} 发新动态啦！】`;

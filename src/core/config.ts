@@ -57,6 +57,23 @@ export interface AssistantConfig {
     /** 复读机黑名单群 group_openid */
     blackList: string[];
   };
+  /** 群内 /ask 代码问答 */
+  ask: AskConfig;
+}
+
+export interface AskGithubConfig {
+  /** Grok Bot routine webhook；留空则关闭 /ask */
+  webhookUrl: string;
+  /** 原样附加到 webhook 请求的额外头（例如面板上的发送方密钥）。属于密钥，接口返回时打码 */
+  headers: Record<string, string>;
+  /** 白名单：group_openid → 该群要查询的 GitHub 仓库。未列出的群不能使用 /ask */
+  groups: Record<string, string>;
+  /** 同一群两次 /ask 的最小间隔（秒） */
+  cooldownSec: number;
+}
+
+export interface AskConfig {
+  github: AskGithubConfig;
 }
 
 export type PanelEditableConfig = Omit<
@@ -65,6 +82,65 @@ export type PanelEditableConfig = Omit<
 >;
 
 export const CONFIG_PATH = path.resolve('config.json');
+
+const SECRET_MASK = '******';
+
+function isMaskedSecret(value: string): boolean {
+  return value === SECRET_MASK || /^\*{3,}$/.test(value);
+}
+
+function normalizeStringRecord(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const name = key.trim();
+    if (!name || typeof value !== 'string') continue;
+    out[name] = value;
+  }
+  return out;
+}
+
+function normalizeGroupRepos(input: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(normalizeStringRecord(input))) {
+    const repo = value.trim();
+    if (repo) out[key] = repo;
+  }
+  return out;
+}
+
+function normalizeCooldown(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), 24 * 60 * 60);
+}
+
+/** 非空密钥打码。管理面板往返保存时凭这个标记保留磁盘上的原值 */
+export function maskSecretRecord(record: Record<string, string>): Record<string, string> {
+  const masked: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    masked[key] = value ? SECRET_MASK : '';
+  }
+  return masked;
+}
+
+/** 面板/接口回写时：打码值还原为磁盘原值，避免把 ****** 写进 config.json */
+function mergeSecretRecord(disk: Record<string, string>, incoming: unknown): Record<string, string> {
+  if (incoming === undefined) return { ...disk };
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return { ...disk };
+  const merged: Record<string, string> = { ...disk };
+  for (const [key, value] of Object.entries(incoming)) {
+    const name = key.trim();
+    if (!name || typeof value !== 'string') continue;
+    if (isMaskedSecret(value)) {
+      if (disk[name] === undefined) delete merged[name];
+      else merged[name] = disk[name];
+      continue;
+    }
+    merged[name] = value;
+  }
+  return merged;
+}
 
 function createDefaultConfig(): AssistantConfig {
   return {
@@ -85,6 +161,9 @@ function createDefaultConfig(): AssistantConfig {
     ytLivePush: { enable: false, config: {} },
     hPic: { enable: false, whiteGroupIds: [], enableR18: false },
     repeater: { enable: true, blackList: [] },
+    ask: {
+      github: { webhookUrl: '', headers: {}, groups: {}, cooldownSec: 30 },
+    },
   };
 }
 
@@ -132,6 +211,16 @@ function mergeWithDefault(raw: Partial<AssistantConfig>): AssistantConfig {
       ...(raw.repeater ?? {}),
       blackList: Array.isArray(raw.repeater?.blackList) ? raw.repeater.blackList.map(String) : def.repeater.blackList,
     },
+    ask: {
+      github: {
+        webhookUrl: typeof raw.ask?.github?.webhookUrl === 'string'
+          ? raw.ask.github.webhookUrl.trim()
+          : def.ask.github.webhookUrl,
+        headers: normalizeStringRecord(raw.ask?.github?.headers),
+        groups: normalizeGroupRepos(raw.ask?.github?.groups),
+        cooldownSec: normalizeCooldown(raw.ask?.github?.cooldownSec, def.ask.github.cooldownSec),
+      },
+    },
   };
 }
 
@@ -166,6 +255,16 @@ export function applyPanelConfig(patch: PanelEditableConfig) {
     puppeteerExecutablePath: disk.puppeteerExecutablePath,
     nonokaService: disk.nonokaService,
     apiKeys: disk.apiKeys,
+    ask: {
+      github: {
+        webhookUrl: typeof patch.ask?.github?.webhookUrl === 'string'
+          ? patch.ask.github.webhookUrl
+          : disk.ask.github.webhookUrl,
+        headers: mergeSecretRecord(disk.ask.github.headers, patch.ask?.github?.headers),
+        groups: patch.ask?.github?.groups ?? disk.ask.github.groups,
+        cooldownSec: patch.ask?.github?.cooldownSec ?? disk.ask.github.cooldownSec,
+      },
+    },
   });
 
   saveConfigToDisk(merged);
@@ -180,5 +279,14 @@ export function getRedactedConfig(): PanelEditableConfig {
     apiKeys: _a,
     ...rest
   } = config;
-  return rest;
+  return {
+    ...rest,
+    ask: {
+      ...rest.ask,
+      github: {
+        ...rest.ask.github,
+        headers: maskSecretRecord(rest.ask.github.headers),
+      },
+    },
+  };
 }

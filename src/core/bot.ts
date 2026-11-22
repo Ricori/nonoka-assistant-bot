@@ -1,4 +1,4 @@
-import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
+import { Bot, ReceiverMode, type Quotable, type Sendable } from 'qq-official-bot';
 import { config } from './config';
 import { logDebug, logError, logInfo, logWarn } from './logger';
 import { sleep, summarizeSendable } from '@/utils/message';
@@ -215,31 +215,40 @@ function isImageVerifyRetryableError(err: unknown): boolean {
   return code === 40034004 || /40034004|40035\d{3}|image|media|resource|转存|图片|timeout|ECONNRESET|ETIMEDOUT/i.test(text);
 }
 
-/** 向指定群依次发送多条主动消息（带 Markdown 图片强校验失败重试与降级兜底） */
-export async function sendGroupMessages(groupId: string, messages: Sendable[]) {
+/**
+ * 向指定群依次发送多条消息（带 Markdown 图片强校验失败重试与降级兜底）。
+ * 传入 source（如 `{ id: msgId }`）时走被动回复，否则为主动推送。
+ * 单条失败不会中断后续发送；最后一次失败的异常放在 error 上，便于调用方识别 40034005 等平台错误码。
+ */
+export async function sendGroupMessages(groupId: string, messages: Sendable[], source?: Quotable) {
   let sent = 0;
   let failed = 0;
+  let error: unknown;
+  const deliver = (message: Sendable) => bot.group(groupId).send(message, source);
+
   for (const msg of messages) {
     try {
-      await bot.group(groupId).send(msg);
+      await deliver(msg);
       sent += 1;
     } catch (err) {
+      error = err;
       if (hasForceVerifyMarkdown(msg) && isImageVerifyRetryableError(err)) {
         logWarn('Push', `Markdown 图片强校验发送失败，1.5s 后重试 group_openid=${groupId}`);
         await sleep(1500);
         try {
-          await bot.group(groupId).send(msg);
+          await deliver(msg);
           sent += 1;
           continue;
         } catch (retryErr) {
+          error = retryErr;
           if (isImageVerifyRetryableError(retryErr)) {
             logWarn('Push', `Markdown 图片强校验重试仍失败，降级关闭强校验发送 group_openid=${groupId}`);
             try {
-              await bot.group(groupId).send(withoutForceVerifyMarkdown(msg));
+              await deliver(withoutForceVerifyMarkdown(msg));
               sent += 1;
               continue;
-            } catch {
-              // 失败已由 sendGroupMessage 拦截器记录
+            } catch (fallbackErr) {
+              error = fallbackErr;
             }
           }
         }
@@ -248,7 +257,7 @@ export async function sendGroupMessages(groupId: string, messages: Sendable[]) {
       // 发送失败已由 sendGroupMessage 拦截器记录，此处吞掉以继续后续发送
     }
   }
-  return { total: messages.length, sent, failed };
+  return { total: messages.length, sent, failed, error };
 }
 
 /** 通知首位管理员（需先与机器人建立过单聊） */

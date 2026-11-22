@@ -36,7 +36,7 @@
 
 - 空问题会回复：`用法：/ask <问题>`。问题正文最长 2000 字。
 - 私聊里会提示到群里使用。未出现在 `ask.github.groups` 中的群不回复。
-- 受理后机器人立刻回复「收到，正在查阅代码，稍后回复～」，并异步 `POST webhookUrl`。等待响应的时间是 `ask.github.timeoutSec`（默认 60 秒）。
+- 受理后机器人立刻回复「收到，正在查询，稍后回复～」，并异步 `POST webhookUrl`。等待响应的时间是 `ask.github.timeoutSec`（默认 60 秒）。
 - 可以只发图片，或图片配一句短文字。问题文本里的 `[图片]` 占位不会转发出去。
 - 耗时达到 `ask.github.timeoutSec`（默认 60 秒）且错误码是 `ECONNABORTED` / `ETIMEDOUT`、没有 HTTP 响应时，只记一条警告日志，不在群里发失败提示。
 - 更早被中断的连接（耗时还没到超时），或 webhook 返回非 2xx 时，群里回复「代码查询失败，请稍后再试」。日志带 `code`、`message`、`cause` 和请求体字节数；非 2xx 再带上 HTTP 状态码和响应体。每次发送都会记下请求体字节数。

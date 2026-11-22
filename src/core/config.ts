@@ -70,6 +70,8 @@ export interface AskGithubConfig {
   groups: Record<string, string>;
   /** 同一群两次 /ask 的最小间隔（秒） */
   cooldownSec: number;
+  /** webhook 等待响应的超时（秒）。超时视为请求已发出，不在群里报失败 */
+  timeoutSec: number;
 }
 
 export interface AskConfig {
@@ -112,6 +114,12 @@ function normalizeGroupRepos(input: unknown): Record<string, string> {
 function normalizeCooldown(value: unknown, fallback: number): number {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), 24 * 60 * 60);
+}
+
+function normalizeTimeoutSec(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return fallback;
   return Math.min(Math.floor(n), 24 * 60 * 60);
 }
 
@@ -162,7 +170,7 @@ function createDefaultConfig(): AssistantConfig {
     hPic: { enable: false, whiteGroupIds: [], enableR18: false },
     repeater: { enable: true, blackList: [] },
     ask: {
-      github: { webhookUrl: '', headers: {}, groups: {}, cooldownSec: 30 },
+      github: { webhookUrl: '', headers: {}, groups: {}, cooldownSec: 30, timeoutSec: 60 },
     },
   };
 }
@@ -219,6 +227,7 @@ function mergeWithDefault(raw: Partial<AssistantConfig>): AssistantConfig {
         headers: normalizeStringRecord(raw.ask?.github?.headers),
         groups: normalizeGroupRepos(raw.ask?.github?.groups),
         cooldownSec: normalizeCooldown(raw.ask?.github?.cooldownSec, def.ask.github.cooldownSec),
+        timeoutSec: normalizeTimeoutSec(raw.ask?.github?.timeoutSec, def.ask.github.timeoutSec),
       },
     },
   };
@@ -263,6 +272,7 @@ export function applyPanelConfig(patch: PanelEditableConfig) {
         headers: mergeSecretRecord(disk.ask.github.headers, patch.ask?.github?.headers),
         groups: patch.ask?.github?.groups ?? disk.ask.github.groups,
         cooldownSec: patch.ask?.github?.cooldownSec ?? disk.ask.github.cooldownSec,
+        timeoutSec: patch.ask?.github?.timeoutSec ?? disk.ask.github.timeoutSec,
       },
     },
   });

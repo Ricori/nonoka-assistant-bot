@@ -115,6 +115,45 @@ function collectElementImages(elements?: MessageElement[]): string[] {
   return urls;
 }
 
+/**
+ * 把平台给的图片地址收成绝对 https URL。
+ * `//host/...` 与裸域名补上 https；SDK 把 `//host` 拼成 `https:////host` 时把多余斜杠收掉。
+ * base64 / data URI / 本地路径不返回，避免把图片内容放进 JSON。
+ */
+export function toAbsoluteHttpsUrl(raw: string): string | undefined {
+  let url = raw.trim();
+  if (!url || /^(?:data:|base64:)/i.test(url)) return undefined;
+  if (url.startsWith('//')) url = `https:${url}`;
+  else if (/^https?:\/\//i.test(url)) url = url.replace(/^(https?:)\/{2,}/i, '$1//');
+  else if (/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d+)?(?:[/?#]|$)/.test(url)) url = `https://${url}`;
+  else return undefined;
+  if (/^http:\/\//i.test(url)) url = `https://${url.slice('http://'.length)}`;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 当前消息图片附件的 https URL（不含引用消息，不含 base64） */
+export function collectEventImageUrls(event: IncomingMessageEvent): string[] {
+  const urls: string[] = [];
+  const push = (raw?: string) => {
+    if (!raw) return;
+    const abs = toAbsoluteHttpsUrl(raw);
+    if (abs) urls.push(abs);
+  };
+  const list = Array.isArray(event.message) ? event.message : [event.message];
+  for (const seg of list) {
+    if (typeof seg !== 'object' || seg === null || seg.type !== 'image') continue;
+    if (typeof seg.data.url === 'string') push(seg.data.url);
+    else if (typeof seg.data.file === 'string') push(seg.data.file);
+  }
+  return [...new Set(urls)];
+}
+
 /** 提取当前消息本身附带的图片 URL */
 export function getOwnImageUrls(message: Sendable): string[] {
   const list = Array.isArray(message) ? message : [message];

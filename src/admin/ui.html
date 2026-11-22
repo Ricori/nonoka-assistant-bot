@@ -431,6 +431,10 @@
             <label>冷却（秒）</label>
             <input type="text" id="askCooldown" placeholder="30">
           </div>
+          <div class="form-row">
+            <label>超时（秒）</label>
+            <input type="text" id="askTimeout" placeholder="60">
+          </div>
           <div class="form-row top">
             <label>群白名单</label>
             <div>
@@ -622,6 +626,7 @@
     const askGithub = cfg.ask?.github || {};
     document.getElementById('askWebhookUrl').value = askGithub.webhookUrl || '';
     document.getElementById('askCooldown').value = String(askGithub.cooldownSec ?? 30);
+    document.getElementById('askTimeout').value = String(askGithub.timeoutSec ?? 60);
     buildKvTable(
       document.getElementById('askGroupTable'),
       askGithub.groups,
@@ -663,6 +668,10 @@
           cooldownSec: (() => {
             const raw = parseInt(document.getElementById('askCooldown').value, 10);
             return Number.isFinite(raw) && raw >= 0 ? raw : 30;
+          })(),
+          timeoutSec: (() => {
+            const raw = parseInt(document.getElementById('askTimeout').value, 10);
+            return Number.isFinite(raw) && raw > 0 ? raw : 60;
           })(),
         },
       },

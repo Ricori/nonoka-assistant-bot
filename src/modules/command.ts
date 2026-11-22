@@ -3,8 +3,8 @@ import { sendGroupMessages } from '@/core/bot';
 import { config } from '@/core/config';
 import { isBotAdmin, isGroupManager } from '@/core/permission';
 import scheduler from '@/core/scheduler';
-import { logError, logInfo } from '@/core/logger';
-import { postAskWebhook } from '@/service/ask';
+import { logError, logInfo, logWarn } from '@/core/logger';
+import { AskWebhookHttpError, AskWebhookTimeoutError, postAskWebhook } from '@/service/ask';
 import { createMsgFromTweetId } from '@/service/twitter/message';
 import { sendSegmentedVoice, TTS_MAX_TOTAL_LENGTH } from '@/service/tts';
 import { getCleanText, getRefIdx, type IncomingMessageEvent } from '@/utils/message';
@@ -138,8 +138,17 @@ async function handleAsk(event: GroupMessageEvent, cleanText: string) {
     ...(msgId ? { msgId } : {}),
   };
   const headers = { ...config.ask.github.headers };
-  void postAskWebhook(webhookUrl, payload, headers).catch((err) => {
-    logError('Ask', `webhook 请求失败 group=${groupId}:`, err);
+  const timeoutSec = config.ask.github.timeoutSec;
+  void postAskWebhook(webhookUrl, payload, headers, timeoutSec).catch((err) => {
+    if (err instanceof AskWebhookTimeoutError) {
+      logWarn('Ask', `webhook 超时 group=${groupId} timeoutSec=${timeoutSec}，请求可能已送达`);
+      return;
+    }
+    if (err instanceof AskWebhookHttpError) {
+      logError('Ask', `webhook 非 2xx group=${groupId} status=${err.status} body=`, err.body);
+    } else {
+      logError('Ask', `webhook 连接失败 group=${groupId}:`, err);
+    }
     event.reply('代码查询失败，请稍后再试').catch((replyErr) => {
       logError('Ask', '失败提示发送失败:', replyErr);
     });

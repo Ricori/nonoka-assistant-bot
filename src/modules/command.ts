@@ -123,7 +123,7 @@ async function handleAsk(event: GroupMessageEvent, cleanText: string) {
 
   const msgId = event.message_id || event.id || '';
   try {
-    await event.reply('收到，正在查阅代码，稍后回复～');
+    await event.reply('收到，正在查询，稍后回复～');
   } catch (err) {
     askLastAt.delete(groupId);
     throw err;

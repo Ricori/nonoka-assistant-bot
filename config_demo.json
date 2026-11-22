@@ -52,7 +52,8 @@
       "webhookUrl": "",
       "headers": {},
       "groups": {},
-      "cooldownSec": 30
+      "cooldownSec": 30,
+      "timeoutSec": 60
     }
   }
 }

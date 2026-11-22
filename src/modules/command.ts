@@ -4,10 +4,17 @@ import { config } from '@/core/config';
 import { isBotAdmin, isGroupManager } from '@/core/permission';
 import scheduler from '@/core/scheduler';
 import { logError, logInfo, logWarn } from '@/core/logger';
-import { AskWebhookHttpError, AskWebhookTimeoutError, postAskWebhook } from '@/service/ask';
+import {
+  AskWebhookConnectionError,
+  AskWebhookHttpError,
+  AskWebhookTimeoutError,
+  askPayloadBytes,
+  formatAskTransport,
+  postAskWebhook,
+} from '@/service/ask';
 import { createMsgFromTweetId } from '@/service/twitter/message';
 import { sendSegmentedVoice, TTS_MAX_TOTAL_LENGTH } from '@/service/tts';
-import { getCleanText, getRefIdx, type IncomingMessageEvent } from '@/utils/message';
+import { collectEventImageUrls, getCleanText, getRefIdx, type IncomingMessageEvent } from '@/utils/message';
 
 const ASK_QUESTION_MAX = 2000;
 const askLastAt = new Map<string, number>();
@@ -96,8 +103,12 @@ async function handleAsk(event: GroupMessageEvent, cleanText: string) {
   const repo = config.ask.github.groups[groupId];
   if (!repo) return;
 
-  const question = cleanText.replace(/^\/ask\b/, '').trim();
-  if (!question) {
+  const question = cleanText
+    .replace(/^\/ask\b/, '')
+    .replace(/\[图片(?:\s*x\d+)?\]/g, '')
+    .trim();
+  const images = collectEventImageUrls(event);
+  if (!question && images.length === 0) {
     await event.reply('用法：/ask <问题>');
     return;
   }
@@ -129,25 +140,32 @@ async function handleAsk(event: GroupMessageEvent, cleanText: string) {
     throw err;
   }
 
-  logInfo('Ask', `${event.user_id} 在群 ${groupId} 提问 repo=${repo}`);
   const payload = {
     question,
     groupId,
     userId: event.user_id,
     repo,
     ...(msgId ? { msgId } : {}),
+    ...(images.length ? { images } : {}),
   };
+  const bytes = askPayloadBytes(payload);
+  logInfo('Ask', `${event.user_id} 在群 ${groupId} 提问 repo=${repo} bytes=${bytes} images=${images.length}`);
   const headers = { ...config.ask.github.headers };
   const timeoutSec = config.ask.github.timeoutSec;
   void postAskWebhook(webhookUrl, payload, headers, timeoutSec).catch((err) => {
+    const detail = err instanceof AskWebhookTimeoutError
+      || err instanceof AskWebhookHttpError
+      || err instanceof AskWebhookConnectionError
+      ? formatAskTransport(err.detail)
+      : `bytes=${bytes}`;
     if (err instanceof AskWebhookTimeoutError) {
-      logWarn('Ask', `webhook 超时 group=${groupId} timeoutSec=${timeoutSec}，请求可能已送达`);
+      logWarn('Ask', `webhook 超时 group=${groupId} ${detail}，请求可能已送达`);
       return;
     }
     if (err instanceof AskWebhookHttpError) {
-      logError('Ask', `webhook 非 2xx group=${groupId} status=${err.status} body=`, err.body);
+      logError('Ask', `webhook 非 2xx group=${groupId} status=${err.status} ${detail} body=`, err.body);
     } else {
-      logError('Ask', `webhook 连接失败 group=${groupId}:`, err);
+      logError('Ask', `webhook 连接失败 group=${groupId} ${detail}`, err instanceof AskWebhookConnectionError ? '' : err);
     }
     event.reply('代码查询失败，请稍后再试').catch((replyErr) => {
       logError('Ask', '失败提示发送失败:', replyErr);

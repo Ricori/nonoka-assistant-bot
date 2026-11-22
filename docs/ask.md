@@ -37,8 +37,9 @@
 - 空问题会回复：`用法：/ask <问题>`。问题正文最长 2000 字。
 - 私聊里会提示到群里使用。未出现在 `ask.github.groups` 中的群不回复。
 - 受理后机器人立刻回复「收到，正在查阅代码，稍后回复～」，并异步 `POST webhookUrl`。等待响应的时间是 `ask.github.timeoutSec`（默认 60 秒）。
-- 等待超时（`ECONNABORTED` / `ETIMEDOUT`，请求已经发出）只记一条警告日志，不在群里发失败提示。
-- 连接失败，或 webhook 返回非 2xx 时，群里回复「代码查询失败，请稍后再试」。非 2xx 会把 HTTP 状态码和响应体写入日志。
+- 可以只发图片，或图片配一句短文字。问题文本里的 `[图片]` 占位不会转发出去。
+- 耗时达到 `ask.github.timeoutSec`（默认 60 秒）且错误码是 `ECONNABORTED` / `ETIMEDOUT`、没有 HTTP 响应时，只记一条警告日志，不在群里发失败提示。
+- 更早被中断的连接（耗时还没到超时），或 webhook 返回非 2xx 时，群里回复「代码查询失败，请稍后再试」。日志带 `code`、`message`、`cause` 和请求体字节数；非 2xx 再带上 HTTP 状态码和响应体。每次发送都会记下请求体字节数。
 
 请求体：
 
@@ -48,11 +49,12 @@
   "groupId": "<group_openid>",
   "userId": "<user_openid>",
   "repo": "Ricori/nonoka-sub-x",
-  "msgId": "<消息 ID，事件里有则带上>"
+  "msgId": "<消息 ID，事件里有则带上>",
+  "images": ["https://multimedia.nt.qq.com.cn/download?......"]
 }
 ```
 
-`msgId` 只在事件带了消息 ID 时出现，回传答案时带上它可以走被动回复。
+`msgId` 只在事件带了消息 ID 时出现，回传答案时带上它可以走被动回复。`images` 只在当前消息带图片附件时出现，元素是绝对 https URL，不含图片字节或 base64。没有文字、只有图片时 `question` 为空字符串。
 
 ## 把答案发回群里
 

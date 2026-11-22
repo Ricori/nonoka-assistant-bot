@@ -1,11 +1,16 @@
 import { GroupMessageEvent, segment } from 'qq-official-bot';
 import { sendGroupMessages } from '@/core/bot';
+import { config } from '@/core/config';
 import { isBotAdmin, isGroupManager } from '@/core/permission';
 import scheduler from '@/core/scheduler';
 import { logError, logInfo } from '@/core/logger';
+import { postAskWebhook } from '@/service/ask';
 import { createMsgFromTweetId } from '@/service/twitter/message';
 import { sendSegmentedVoice, TTS_MAX_TOTAL_LENGTH } from '@/service/tts';
 import { getCleanText, getRefIdx, type IncomingMessageEvent } from '@/utils/message';
+
+const ASK_QUESTION_MAX = 2000;
+const askLastAt = new Map<string, number>();
 
 const DEFAULT_BAN_MINUTES = 10;
 const MAX_BAN_MINUTES = 30 * 24 * 60;
@@ -86,6 +91,61 @@ async function handleBan(event: GroupMessageEvent, cleanText: string) {
   }
 }
 
+async function handleAsk(event: GroupMessageEvent, cleanText: string) {
+  const groupId = event.group_id;
+  const repo = config.ask.github.groups[groupId];
+  if (!repo) return;
+
+  const question = cleanText.replace(/^\/ask\b/, '').trim();
+  if (!question) {
+    await event.reply('用法：/ask <问题>');
+    return;
+  }
+  if (question.length > ASK_QUESTION_MAX) {
+    await event.reply(`问题太长，最多 ${ASK_QUESTION_MAX} 字`);
+    return;
+  }
+
+  const webhookUrl = config.ask.github.webhookUrl.trim();
+  if (!webhookUrl) {
+    await event.reply('代码问答未启用');
+    return;
+  }
+
+  const cooldownMs = Math.max(0, config.ask.github.cooldownSec) * 1000;
+  const now = Date.now();
+  const remainMs = (askLastAt.get(groupId) ?? 0) + cooldownMs - now;
+  if (cooldownMs > 0 && remainMs > 0) {
+    await event.reply(`提问太频繁，请 ${Math.ceil(remainMs / 1000)} 秒后再试`);
+    return;
+  }
+  askLastAt.set(groupId, now);
+
+  const msgId = event.message_id || event.id || '';
+  try {
+    await event.reply('收到，正在查阅代码，稍后回复～');
+  } catch (err) {
+    askLastAt.delete(groupId);
+    throw err;
+  }
+
+  logInfo('Ask', `${event.user_id} 在群 ${groupId} 提问 repo=${repo}`);
+  const payload = {
+    question,
+    groupId,
+    userId: event.user_id,
+    repo,
+    ...(msgId ? { msgId } : {}),
+  };
+  const headers = { ...config.ask.github.headers };
+  void postAskWebhook(webhookUrl, payload, headers).catch((err) => {
+    logError('Ask', `webhook 请求失败 group=${groupId}:`, err);
+    event.reply('代码查询失败，请稍后再试').catch((replyErr) => {
+      logError('Ask', '失败提示发送失败:', replyErr);
+    });
+  });
+}
+
 export async function handleCommand(event: IncomingMessageEvent): Promise<boolean> {
   const cleanText = getCleanText(event.raw_message);
   if (!cleanText.startsWith('/')) return false;
@@ -125,6 +185,15 @@ export async function handleCommand(event: IncomingMessageEvent): Promise<boolea
       return true;
     }
     await handleBan(event, cleanText);
+    return true;
+  }
+
+  if (/^\/ask(\s|$)/.test(cleanText)) {
+    if (!isGroup) {
+      await event.reply('请在群聊中使用 /ask');
+      return true;
+    }
+    await handleAsk(event, cleanText);
     return true;
   }
 

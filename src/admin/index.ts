@@ -3,9 +3,10 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { botMode, runtimeState } from '@/core/bot';
-import { applyPanelConfig, getRedactedConfig, type PanelEditableConfig } from '@/core/config';
-import { getRecentLogs, logError, logInfo, subscribeLogs } from '@/core/logger';
+import { segment } from 'qq-official-bot';
+import { botMode, runtimeState, sendGroupMessages } from '@/core/bot';
+import { config, applyPanelConfig, getRedactedConfig, type PanelEditableConfig } from '@/core/config';
+import { getRecentLogs, logError, logInfo, logWarn, subscribeLogs } from '@/core/logger';
 import scheduler from '@/core/scheduler';
 import storage from '@/core/storage';
 import { getGallerySummary } from '@/modules/localPic/functions';
@@ -13,6 +14,7 @@ import { getGallerySummary } from '@/modules/localPic/functions';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UI_HTML = fs.readFileSync(path.join(__dirname, 'ui.html'), 'utf8');
 const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_SEND_GROUP_TEXT = 2000;
 
 function sendJson(res: http.ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -48,7 +50,82 @@ function validatePatch(v: unknown): v is PanelEditableConfig {
     && isRecord(v.biliDynamicPush)
     && isRecord(v.ytLivePush)
     && isRecord(v.hPic)
-    && isRecord(v.repeater);
+    && isRecord(v.repeater)
+    && isRecord(v.ask)
+    && isRecord(v.ask.github);
+}
+
+function readPlatformError(err: unknown): { code?: number; message: string } {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  const record = data && typeof data === 'object' ? data as Record<string, unknown> : undefined;
+  const rawCode = record?.code ?? record?.err_code;
+  const code = typeof rawCode === 'number'
+    ? rawCode
+    : typeof rawCode === 'string' && /^\d+$/.test(rawCode) ? Number(rawCode) : undefined;
+  const rawMessage = record?.message ?? record?.err_msg ?? record?.msg;
+  const message = typeof rawMessage === 'string' && rawMessage.trim()
+    ? rawMessage.trim()
+    : err instanceof Error && err.message
+      ? err.message
+      : 'send failed';
+  // qq-official-bot 把平台错误收成 `code(40034012): ...`，响应体不再挂在 error 上
+  const wrapped = code === undefined ? message.match(/code\((\d+)\)/) : undefined;
+  return { code: code ?? (wrapped ? Number(wrapped[1]) : undefined), message };
+}
+
+const MESSAGE_LIMIT_CODES = new Set([40034005, 40034100, 40034128]);
+const MARKDOWN_REJECT_CODES = new Set([
+  22006,
+  304036,
+  340069,
+  40034008,
+  40034009,
+  40034010,
+  40034011,
+  40034012,
+  40034124,
+  40034127,
+]);
+
+function isMessageLimit(info: { code?: number; message: string }): boolean {
+  if (info.code !== undefined && MESSAGE_LIMIT_CODES.has(info.code)) return true;
+  return /40034005|40034100|40034128|msg limit|message limit|频控/i.test(info.message);
+}
+
+type GroupSendFormat = 'markdown' | 'text';
+
+function parseSendGroupBody(v: unknown):
+  | { ok: true; groupId: string; text: string; msgId?: string; format: GroupSendFormat }
+  | { ok: false; error: string } {
+  if (!isRecord(v)) return { ok: false, error: 'invalid body' };
+  if (typeof v.groupId !== 'string' || typeof v.text !== 'string') {
+    return { ok: false, error: 'groupId and text are required' };
+  }
+  const groupId = v.groupId.trim();
+  const text = v.text.trim();
+  if (!groupId || !text) return { ok: false, error: 'groupId and text are required' };
+  if (text.length > MAX_SEND_GROUP_TEXT) return { ok: false, error: 'text too long' };
+
+  let format: GroupSendFormat = 'markdown';
+  if (v.format !== undefined) {
+    if (v.format !== 'markdown' && v.format !== 'text') return { ok: false, error: 'invalid format' };
+    format = v.format;
+  }
+
+  if (v.msgId === undefined || v.msgId === null || v.msgId === '') {
+    return { ok: true, groupId, text, format };
+  }
+  if (typeof v.msgId !== 'string') return { ok: false, error: 'invalid msgId' };
+  const msgId = v.msgId.trim();
+  if (!msgId) return { ok: true, groupId, text, format };
+  return { ok: true, groupId, text, msgId, format };
+}
+
+/** 平台拒绝了这条 markdown（无原生权限、模板权限、内容不合法等）。频率限制不在此列。 */
+function isMarkdownRejection(info: { code?: number; message: string }): boolean {
+  if (isMessageLimit(info)) return false;
+  if (info.code !== undefined && MARKDOWN_REJECT_CODES.has(info.code)) return true;
+  return /markdown|不允许发送原生/i.test(info.message);
 }
 
 export class AssistantAdmin {
@@ -152,6 +229,72 @@ export class AssistantAdmin {
       applyPanelConfig(parsed);
       logInfo('AdminPanel', '配置已通过管理面板更新');
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (url.pathname === '/api/send_group' && req.method === 'POST') {
+      let body: string;
+      try {
+        body = await readBody(req);
+      } catch {
+        sendJson(res, 413, { error: 'body too large' });
+        return;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = body ? JSON.parse(body) : undefined;
+      } catch {
+        sendJson(res, 400, { error: 'invalid json' });
+        return;
+      }
+
+      const payload = parseSendGroupBody(parsed);
+      if (!payload.ok) {
+        sendJson(res, 400, { error: payload.error });
+        return;
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(config.ask.github.groups, payload.groupId)) {
+        logWarn('AdminPanel', `send_group 拒绝未在 ask.github.groups 中的群 group_openid=${payload.groupId}`);
+        sendJson(res, 403, { error: 'group not allowed' });
+        return;
+      }
+
+      const source = payload.msgId ? { id: payload.msgId } : undefined;
+      const deliver = (message: string | ReturnType<typeof segment.markdown>) => (
+        sendGroupMessages(payload.groupId, [message], source)
+      );
+
+      let result = payload.format === 'text'
+        ? await deliver(payload.text)
+        : await deliver(segment.markdown(payload.text));
+      let deliveredFormat: GroupSendFormat = payload.format;
+
+      if (result.failed > 0 && payload.format === 'markdown') {
+        const info = readPlatformError(result.error);
+        if (isMarkdownRejection(info)) {
+          logWarn(
+            'AdminPanel',
+            `send_group markdown 被拒绝 code=${info.code ?? '-'} group_openid=${payload.groupId}，改发明文: ${info.message}`,
+          );
+          result = await deliver(payload.text);
+          deliveredFormat = 'text';
+        }
+      }
+
+      if (result.failed > 0) {
+        const info = readPlatformError(result.error);
+        if (isMessageLimit(info)) {
+          sendJson(res, 429, { error: info.message || 'message limit', code: info.code ?? 40034005 });
+          return;
+        }
+        sendJson(res, 502, { error: info.message || 'send failed', ...(info.code !== undefined ? { code: info.code } : {}) });
+        return;
+      }
+
+      logInfo('AdminPanel', `send_group 已发送 group_openid=${payload.groupId} len=${payload.text.length} format=${deliveredFormat} passive=${payload.msgId ? 'yes' : 'no'}`);
+      sendJson(res, 200, { ok: true, format: deliveredFormat });
       return;
     }
 

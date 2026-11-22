@@ -421,6 +421,28 @@
 
         <div class="card">
           <div class="card-head">
+            <h2>代码问答（/ask）</h2>
+          </div>
+          <div class="form-row">
+            <label>webhookUrl</label>
+            <input type="text" id="askWebhookUrl" placeholder="留空则关闭 /ask">
+          </div>
+          <div class="form-row">
+            <label>冷却（秒）</label>
+            <input type="text" id="askCooldown" placeholder="30">
+          </div>
+          <div class="form-row top">
+            <label>群白名单</label>
+            <div>
+              <table class="map-table" id="askGroupTable"></table>
+              <button type="button" class="btn sm" id="askGroupAdd">+ 添加群</button>
+              <div class="hint" style="margin-top:8px">左：group_openid，右：该群对应的 GitHub 仓库（如 owner/repo）。ask.github.headers 含密钥，接口里会打码，请在 config.json 中填写。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
             <h2>涩图功能（HPic）</h2>
             <label class="switch"><input type="checkbox" id="hPicEnable"><span class="slider"></span></label>
           </div>
@@ -446,7 +468,7 @@
             <label>管理员 user_openid</label>
             <input type="text" id="adminList" placeholder="多个 user_openid 用逗号分隔">
           </div>
-          <div class="hint">nonokaService（baseUrl / apiKey / cdnHost）与 apiKeys（saucenao / lolicon）不在面板暴露，请直接编辑服务器上的 config.json。</div>
+          <div class="hint">nonokaService（baseUrl / apiKey / cdnHost）、apiKeys（saucenao / lolicon）与 ask.github.headers 不在面板展示明文。ask.github.headers 请直接编辑服务器上的 config.json；GET /api/config 会把非空 header 值打码为 ******。</div>
         </div>
       </section>
 
@@ -542,9 +564,40 @@
     return out;
   }
 
+  function addKvRow(tableEl, key, value, keyPh, valPh) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" class="mkey" value="' + escAttr(key) + '" placeholder="' + escAttr(keyPh) + '"></td>' +
+      '<td><input type="text" class="mval" value="' + escAttr(value) + '" placeholder="' + escAttr(valPh) + '"></td>' +
+      '<td class="op"><button type="button" class="btn sm danger rm">✕</button></td>';
+    tr.querySelector('.rm').onclick = () => tr.remove();
+    tableEl.appendChild(tr);
+  }
+
+  function buildKvTable(tableEl, map, keyPh, valPh) {
+    tableEl.innerHTML = '';
+    Object.entries(map || {}).forEach(([k, v]) => {
+      addKvRow(tableEl, k, typeof v === 'string' ? v : '', keyPh, valPh);
+    });
+  }
+
+  function readKvTable(tableEl) {
+    const out = {};
+    tableEl.querySelectorAll('tr').forEach((tr) => {
+      const k = tr.querySelector('.mkey').value.trim();
+      const val = tr.querySelector('.mval').value.trim();
+      if (!k || !val) return;
+      out[k] = val;
+    });
+    return out;
+  }
+
   document.getElementById('tweetAdd').onclick = () => addMapRow(document.getElementById('tweetTable'), '', '');
   document.getElementById('biliAdd').onclick = () => addMapRow(document.getElementById('biliTable'), '', '');
   document.getElementById('ytAdd').onclick = () => addMapRow(document.getElementById('ytTable'), '', '');
+  document.getElementById('askGroupAdd').onclick = () => {
+    addKvRow(document.getElementById('askGroupTable'), '', '', 'group_openid', 'owner/repo');
+  };
 
   function fillConfig(cfg) {
     document.getElementById('adminList').value = (cfg.admin || []).join(', ');
@@ -565,6 +618,16 @@
 
     document.getElementById('repeaterEnable').checked = !!cfg.repeater?.enable;
     document.getElementById('repeaterBlackList').value = (cfg.repeater?.blackList || []).join(', ');
+
+    const askGithub = cfg.ask?.github || {};
+    document.getElementById('askWebhookUrl').value = askGithub.webhookUrl || '';
+    document.getElementById('askCooldown').value = String(askGithub.cooldownSec ?? 30);
+    buildKvTable(
+      document.getElementById('askGroupTable'),
+      askGithub.groups,
+      'group_openid',
+      'owner/repo',
+    );
   }
 
   function collectConfig() {
@@ -592,6 +655,16 @@
       repeater: {
         enable: document.getElementById('repeaterEnable').checked,
         blackList: parseStrList(document.getElementById('repeaterBlackList').value),
+      },
+      ask: {
+        github: {
+          webhookUrl: document.getElementById('askWebhookUrl').value.trim(),
+          groups: readKvTable(document.getElementById('askGroupTable')),
+          cooldownSec: (() => {
+            const raw = parseInt(document.getElementById('askCooldown').value, 10);
+            return Number.isFinite(raw) && raw >= 0 ? raw : 30;
+          })(),
+        },
       },
     };
   }
@@ -886,7 +959,7 @@
   const MSG_PUSH_TAGS = new Set([
     'Recv', 'Send', 'Push', 'Audit', 'GroupFlow', 'PrivateFlow', 'Process',
     'BiliTask', 'TwitterTask', 'YtLiveTask',
-    'Command', 'HPic', 'ImageSearch', 'LocalPic', 'Repeater', 'Notice',
+    'Command', 'Ask', 'HPic', 'ImageSearch', 'LocalPic', 'Repeater', 'Notice',
   ]);
   let logLevelFilter = 'all';
   let logMsgOnly = false;

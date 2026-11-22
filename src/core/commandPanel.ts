@@ -5,6 +5,7 @@ import { logError, logInfo } from './logger';
 const GROUP_PANEL_REMARK = 'nonoka-assistant-group-commands';
 
 export const GROUP_COMMAND_ITEMS: PanelItem[] = [
+  panel.command('/ask', { desc: '向本群绑定的代码仓库提问' }),
   panel.command('/p', { desc: '推送推文（填链接或ID）' }),
   panel.command('/tts', { desc: '文字转语音（支持中日文）' }),
   panel.command('/加图', { desc: '附带或引用图片加入图库' }),

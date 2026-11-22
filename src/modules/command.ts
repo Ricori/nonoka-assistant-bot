@@ -151,8 +151,11 @@ async function handleAsk(event: GroupMessageEvent, cleanText: string) {
   const bytes = askPayloadBytes(payload);
   logInfo('Ask', `${event.user_id} 在群 ${groupId} 提问 repo=${repo} bytes=${bytes} images=${images.length}`);
   const headers = { ...config.ask.github.headers };
-  const timeoutSec = config.ask.github.timeoutSec;
-  void postAskWebhook(webhookUrl, payload, headers, timeoutSec).catch((err) => {
+  void postAskWebhook(webhookUrl, payload, headers, {
+    timeoutSec: config.ask.github.timeoutSec,
+    retries: config.ask.github.retries,
+    retryDelaySec: config.ask.github.retryDelaySec,
+  }).catch((err) => {
     const detail = err instanceof AskWebhookTimeoutError
       || err instanceof AskWebhookHttpError
       || err instanceof AskWebhookConnectionError

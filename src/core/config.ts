@@ -72,6 +72,10 @@ export interface AskGithubConfig {
   cooldownSec: number;
   /** webhook 等待响应的超时（秒）。超时视为请求已发出，不在群里报失败 */
   timeoutSec: number;
+  /** 连接阶段失败后的额外重试次数。默认 2，即一共 3 次 */
+  retries: number;
+  /** 第一次重试前的等待秒数。第 n 次失败后等待 n × 该值 */
+  retryDelaySec: number;
 }
 
 export interface AskConfig {
@@ -123,6 +127,18 @@ function normalizeTimeoutSec(value: unknown, fallback: number): number {
   return Math.min(Math.floor(n), 24 * 60 * 60);
 }
 
+function normalizeRetries(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), 5);
+}
+
+function normalizeRetryDelaySec(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.floor(n), 60);
+}
+
 /** 非空密钥打码。管理面板往返保存时凭这个标记保留磁盘上的原值 */
 export function maskSecretRecord(record: Record<string, string>): Record<string, string> {
   const masked: Record<string, string> = {};
@@ -170,7 +186,15 @@ function createDefaultConfig(): AssistantConfig {
     hPic: { enable: false, whiteGroupIds: [], enableR18: false },
     repeater: { enable: true, blackList: [] },
     ask: {
-      github: { webhookUrl: '', headers: {}, groups: {}, cooldownSec: 30, timeoutSec: 60 },
+      github: {
+        webhookUrl: '',
+        headers: {},
+        groups: {},
+        cooldownSec: 30,
+        timeoutSec: 60,
+        retries: 2,
+        retryDelaySec: 3,
+      },
     },
   };
 }
@@ -228,6 +252,8 @@ function mergeWithDefault(raw: Partial<AssistantConfig>): AssistantConfig {
         groups: normalizeGroupRepos(raw.ask?.github?.groups),
         cooldownSec: normalizeCooldown(raw.ask?.github?.cooldownSec, def.ask.github.cooldownSec),
         timeoutSec: normalizeTimeoutSec(raw.ask?.github?.timeoutSec, def.ask.github.timeoutSec),
+        retries: normalizeRetries(raw.ask?.github?.retries, def.ask.github.retries),
+        retryDelaySec: normalizeRetryDelaySec(raw.ask?.github?.retryDelaySec, def.ask.github.retryDelaySec),
       },
     },
   };
@@ -273,6 +299,8 @@ export function applyPanelConfig(patch: PanelEditableConfig) {
         groups: patch.ask?.github?.groups ?? disk.ask.github.groups,
         cooldownSec: patch.ask?.github?.cooldownSec ?? disk.ask.github.cooldownSec,
         timeoutSec: patch.ask?.github?.timeoutSec ?? disk.ask.github.timeoutSec,
+        retries: patch.ask?.github?.retries ?? disk.ask.github.retries,
+        retryDelaySec: patch.ask?.github?.retryDelaySec ?? disk.ask.github.retryDelaySec,
       },
     },
   });

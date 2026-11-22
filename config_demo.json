@@ -53,7 +53,9 @@
       "headers": {},
       "groups": {},
       "cooldownSec": 30,
-      "timeoutSec": 60
+      "timeoutSec": 60,
+      "retries": 2,
+      "retryDelaySec": 3
     }
   }
 }

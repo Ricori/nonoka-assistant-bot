@@ -435,6 +435,14 @@
             <label>超时（秒）</label>
             <input type="text" id="askTimeout" placeholder="60">
           </div>
+          <div class="form-row">
+            <label>连接重试</label>
+            <input type="text" id="askRetries" placeholder="2">
+          </div>
+          <div class="form-row">
+            <label>重试间隔（秒）</label>
+            <input type="text" id="askRetryDelay" placeholder="3">
+          </div>
           <div class="form-row top">
             <label>群白名单</label>
             <div>
@@ -627,6 +635,8 @@
     document.getElementById('askWebhookUrl').value = askGithub.webhookUrl || '';
     document.getElementById('askCooldown').value = String(askGithub.cooldownSec ?? 30);
     document.getElementById('askTimeout').value = String(askGithub.timeoutSec ?? 60);
+    document.getElementById('askRetries').value = String(askGithub.retries ?? 2);
+    document.getElementById('askRetryDelay').value = String(askGithub.retryDelaySec ?? 3);
     buildKvTable(
       document.getElementById('askGroupTable'),
       askGithub.groups,
@@ -672,6 +682,14 @@
           timeoutSec: (() => {
             const raw = parseInt(document.getElementById('askTimeout').value, 10);
             return Number.isFinite(raw) && raw > 0 ? raw : 60;
+          })(),
+          retries: (() => {
+            const raw = parseInt(document.getElementById('askRetries').value, 10);
+            return Number.isFinite(raw) && raw >= 0 ? raw : 2;
+          })(),
+          retryDelaySec: (() => {
+            const raw = parseInt(document.getElementById('askRetryDelay').value, 10);
+            return Number.isFinite(raw) && raw >= 0 ? raw : 3;
           })(),
         },
       },
